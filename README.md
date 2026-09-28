@@ -13,6 +13,21 @@ the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, 
 
 ---
 
+## Quick start (Windows)
+
+1. Install **Python 3.11+** (tick *Add Python to PATH*) and **MySQL 8**.
+2. Double-click **`run_app.bat`** in the project folder.
+   * First run: it creates the Python environment, installs packages, asks for your MySQL host/user/password,
+     creates the database **ERP_LOGISTICS** with all tables, loads the starting data (optionally demo data),
+     starts the app and opens **http://localhost:8000** in your browser.
+   * Later runs: applies any new migrations and starts the app.
+   * `run_app.bat 8080` starts on another port. Close the window or press Ctrl+C to stop.
+3. Log in as **admin / Admin@12345** (you are asked to change it).
+
+To re-enter the MySQL settings delete the `.env` file and run `run_app.bat` again.
+`daily_jobs.bat` runs the daily renewal/alert checks — schedule it once a day in Windows Task Scheduler.
+Linux/macOS: `./run_app.sh [port]` does the same.
+
 ## Contents
 
 1. [Architecture](#architecture) · 2. [Prerequisites](#prerequisites) · 3. [Installation](#installation) ·
