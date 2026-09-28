@@ -1,5 +1,24 @@
-"""FastAPI application: REST API + server-rendered HTML pages (Jinja2)."""
+"""FastAPI application: REST API + server-rendered HTML pages (Jinja2).
+
+Normally started with `run_app.bat` (Windows) / `run_app.sh`, or `uvicorn app.main:app`.
+Running this file directly (`python main.py`, even from inside the app folder and with a Python that
+does not have the packages) hands over to the start script, which sets everything up and starts the app.
+"""
 from __future__ import annotations
+
+if __name__ == "__main__":  # pragma: no cover - convenience launcher
+    import os
+    import subprocess
+    import sys
+    from pathlib import Path as _P
+
+    _root = _P(__file__).resolve().parent.parent
+    _port = sys.argv[1] if len(sys.argv) > 1 and sys.argv[1].isdigit() else "8000"
+    _script = "run_app.bat" if os.name == "nt" else "./run_app.sh"
+    if not (_root / _script.lstrip("./")).exists():
+        sys.exit(f"Start script {_script} not found in {_root}. Update your copy of the project (git pull).")
+    print(f"Starting TRANS ERP via {_script} in {_root} ...")
+    sys.exit(subprocess.call(f"{_script} {_port}", shell=True, cwd=_root))
 
 import logging
 import uuid

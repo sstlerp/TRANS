@@ -27,6 +27,10 @@ the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, 
 To re-enter the MySQL settings delete the `.env` file and run `run_app.bat` again.
 `daily_jobs.bat` runs the daily renewal/alert checks — schedule it once a day in Windows Task Scheduler.
 Linux/macOS: `./run_app.sh [port]` does the same.
+`python main.py` inside the `app` folder also works: it simply hands over to `run_app.bat` / `run_app.sh`.
+
+If a first run stops with an error, fix the cause and run `run_app.bat` again: every step can be safely repeated
+(the starting data is loaded until it succeeds once).
 
 ## Contents
 

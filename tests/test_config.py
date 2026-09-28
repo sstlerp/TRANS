@@ -22,3 +22,20 @@ def test_settings_apply_normalisation(monkeypatch):
     monkeypatch.setenv("ERP_DATABASE_URL", '"mysql+pymysql://root:x@y@db.local:3307/ERP_LOGISTICS"')
     u = make_url(Settings().database_url)
     assert (u.password, u.host, u.port) == ("x@y", "db.local", 3307)
+
+
+def test_timezone_falls_back_without_tz_database():
+    """Windows without the tzdata package: IST must still work (fixed +05:30 offset)."""
+    from datetime import timedelta
+    from unittest import mock
+    from zoneinfo import ZoneInfoNotFoundError
+
+    from app.core import utils
+
+    utils._zone.cache_clear()
+    try:
+        with mock.patch.object(utils, "ZoneInfo", side_effect=ZoneInfoNotFoundError("no tz data")):
+            zone = utils._zone("Asia/Kolkata")
+            assert zone.utcoffset(None) == timedelta(hours=5, minutes=30)
+    finally:
+        utils._zone.cache_clear()

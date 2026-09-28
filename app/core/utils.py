@@ -3,10 +3,11 @@ from __future__ import annotations
 
 import hashlib
 import re
-from datetime import date, datetime, time
+from datetime import date, datetime, time, timedelta, timezone, tzinfo
+from functools import lru_cache
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any
-from zoneinfo import ZoneInfo
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from app.config import get_settings
 
@@ -15,8 +16,23 @@ DISPLAY_DATETIME = "%d/%m/%Y %H:%M"
 TWO = Decimal("0.01")
 
 
-def tz() -> ZoneInfo:
-    return ZoneInfo(get_settings().timezone)
+# Used when the operating system has no time-zone database (Windows) and the `tzdata` package is missing.
+_FIXED_OFFSETS = {"Asia/Kolkata": timedelta(hours=5, minutes=30), "Asia/Calcutta": timedelta(hours=5, minutes=30),
+                  "UTC": timedelta(0)}
+
+
+@lru_cache
+def _zone(name: str) -> tzinfo:
+    try:
+        return ZoneInfo(name)
+    except (ZoneInfoNotFoundError, ValueError):
+        if name in _FIXED_OFFSETS:
+            return timezone(_FIXED_OFFSETS[name], name)
+        raise
+
+
+def tz() -> tzinfo:
+    return _zone(get_settings().timezone)
 
 
 def now() -> datetime:
