@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     company_name: str = "Transport & Logistics"
 
     # mysql+pymysql://user:pass@host:3306/db?charset=utf8mb4
-    database_url: str = "mysql+pymysql://erp:erp_pass@127.0.0.1:3306/trans_erp?charset=utf8mb4"
+    database_url: str = "mysql+pymysql://erp:erp_pass@127.0.0.1:3306/ERP_LOGISTICS?charset=utf8mb4"
     db_echo: bool = False
     db_pool_size: int = 10
 

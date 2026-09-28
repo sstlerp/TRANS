@@ -53,7 +53,8 @@ Adding a new master screen = add a model + a `MasterSpec` + a menu entry; the UI
 
 ## Data model
 
-90 tables (see `migrations/versions/0001_initial_schema.py`). Technical PKs are `BIGINT AUTO_INCREMENT`; business
+90 tables in the MySQL database **`ERP_LOGISTICS`** (see `migrations/versions/0001_initial_schema.py`, or the
+plain-SQL equivalent `migrations/sql/0001_initial_schema.sql`). Technical PKs are `BIGINT AUTO_INCREMENT`; business
 identifiers are separate unique columns (vehicle code, registration, serial number, invoice number …). Money is
 `DECIMAL(18,2)`, quantities `DECIMAL(18,3)`, rates `DECIMAL(18,4)`; dates are `DATE`/`DATETIME` (never text).
 Masters carry `created_at/updated_at/created_by/updated_by/is_active/deleted_at`.

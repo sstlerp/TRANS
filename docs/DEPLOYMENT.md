@@ -18,6 +18,7 @@ sudo -u erp git clone <repo> /opt/trans-erp && cd /opt/trans-erp
 sudo -u erp python3.11 -m venv .venv && sudo -u erp .venv/bin/pip install -r requirements.txt
 sudo install -o erp -m 600 .env.example /etc/trans-erp.env      # edit: DB URL, SECRET_KEY, COOKIE_SECURE=true …
 sudo mkdir -p /var/lib/trans-erp/storage /var/log/trans-erp && sudo chown -R erp /var/lib/trans-erp /var/log/trans-erp
+# database ERP_LOGISTICS: the migration creates it (utf8mb4) if missing — or run migrations/sql/0001_initial_schema.sql
 sudo -u erp env $(cat /etc/trans-erp.env | xargs) .venv/bin/alembic upgrade head
 sudo -u erp env $(cat /etc/trans-erp.env | xargs) .venv/bin/python -m app.seed
 ```

@@ -5,7 +5,7 @@ services:
     image: mysql:8.0
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+05:30"]
     environment:
-      MYSQL_DATABASE: trans_erp
+      MYSQL_DATABASE: ERP_LOGISTICS
       MYSQL_USER: erp
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp_pass}
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass}
@@ -20,7 +20,7 @@ services:
       db: {condition: service_healthy}
     env_file: [.env]
     environment:
-      ERP_DATABASE_URL: mysql+pymysql://erp:${MYSQL_PASSWORD:-erp_pass}@db:3306/trans_erp?charset=utf8mb4
+      ERP_DATABASE_URL: mysql+pymysql://erp:${MYSQL_PASSWORD:-erp_pass}@db:3306/ERP_LOGISTICS?charset=utf8mb4
       ERP_STORAGE_DIR: /var/lib/trans-erp/storage
       ERP_LOG_DIR: /var/log/trans-erp
     ports: ["8000:8000"]

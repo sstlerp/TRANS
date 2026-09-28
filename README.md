@@ -83,7 +83,7 @@ All settings are read from environment variables (prefix `ERP_`) or `.env`. Noth
 | Variable | Default | Purpose |
 |---|---|---|
 | `ERP_ENV` | development | `production` refuses to start with the development secret key |
-| `ERP_DATABASE_URL` | mysql+pymysql://erp:erp_pass@127.0.0.1:3306/trans_erp?charset=utf8mb4 | SQLAlchemy URL |
+| `ERP_DATABASE_URL` | mysql+pymysql://erp:erp_pass@127.0.0.1:3306/ERP_LOGISTICS?charset=utf8mb4 | SQLAlchemy URL |
 | `ERP_SECRET_KEY` | dev-only | signs session tokens — **set a long random value** |
 | `ERP_ACCESS_TOKEN_MINUTES` | 480 | session lifetime |
 | `ERP_COOKIE_SECURE` | false | set `true` behind HTTPS |
@@ -101,26 +101,51 @@ Integrations stores only the *name* of the environment variable that holds the s
 
 ## MySQL setup
 
+The application database is **`ERP_LOGISTICS`** (utf8mb4). Create a user with rights on it — the migration creates
+the database itself if it does not exist yet:
+
 ```sql
-CREATE DATABASE trans_erp CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER 'erp_user'@'%' IDENTIFIED BY '<strong password>';
-GRANT ALL PRIVILEGES ON trans_erp.* TO 'erp_user'@'%';
+GRANT ALL PRIVILEGES ON `ERP_LOGISTICS`.* TO 'erp_user'@'%';
 -- optional test database for the test-suite
-CREATE DATABASE trans_erp_test CHARACTER SET utf8mb4;
-GRANT ALL PRIVILEGES ON trans_erp_test.* TO 'erp_user'@'%';
+GRANT ALL PRIVILEGES ON `ERP_LOGISTICS_TEST`.* TO 'erp_user'@'%';
 ```
+
+Point the app at it (`.env`): `ERP_DATABASE_URL=mysql+pymysql://erp_user:<password>@<host>:3306/ERP_LOGISTICS?charset=utf8mb4`.
+On Linux MySQL database names are case-sensitive — always write `ERP_LOGISTICS` in upper case.
 
 Recommended server settings: `innodb_file_per_table=ON`, `max_allowed_packet=64M`, `default-time-zone='+05:30'`
 (or keep UTC — the application stores naive local times in the company timezone consistently).
 
 ## Migrations
 
+The migration files that create every table in `ERP_LOGISTICS` are in [`migrations/`](migrations/README.md):
+
+| File | Purpose |
+|---|---|
+| `migrations/versions/0001_initial_schema.py` | Alembic migration: all 90 tables with primary keys, unique keys, indexes and foreign keys |
+| `migrations/sql/0001_initial_schema.sql` | the same schema as plain MySQL SQL, incl. `CREATE DATABASE ERP_LOGISTICS` |
+| `migrations/sql/0001_initial_schema_rollback.sql` | plain-SQL rollback (drops the tables — back up first) |
+
+**Option A — Alembic (recommended):**
+
 ```bash
-alembic upgrade head          # create / upgrade the schema (90 tables + indexes + FKs)
-alembic downgrade base        # drop everything (development only)
-alembic revision --autogenerate -m "describe change"   # after changing app/models/*
-alembic check                 # verify models and migrations agree
+alembic upgrade head          # creates database ERP_LOGISTICS if missing + all tables; later: applies new migrations
+alembic current               # shows the applied revision (0001)
+alembic check                 # verifies models and migrations agree
+alembic downgrade base        # drop all tables (development only)
+alembic revision --autogenerate -m "describe change"   # after changing app/models/*, then:
+scripts/export_sql_migrations.sh                       # refresh the plain-SQL files
 ```
+
+**Option B — plain SQL (MySQL Workbench / command line, no Python needed for the schema):**
+
+```bash
+mysql -u root -p < migrations/sql/0001_initial_schema.sql
+```
+
+Either way, then load the reference data with `python -m app.seed`. Both options produce an identical schema and
+record revision `0001` in `alembic_version`, so you can switch to Alembic for later upgrades.
 
 ## Seed data
 
@@ -155,7 +180,7 @@ python -m app.jobs daily                                  # schedule daily (rene
 
 ```bash
 pytest                                                   # SQLite fallback (fast)
-ERP_TEST_DATABASE_URL="mysql+pymysql://erp_user:pw@127.0.0.1/trans_erp_test?charset=utf8mb4" pytest   # real MySQL
+ERP_TEST_DATABASE_URL="mysql+pymysql://erp_user:pw@127.0.0.1/ERP_LOGISTICS_TEST?charset=utf8mb4" pytest   # real MySQL
 ```
 
 105 tests cover unit (transformations, parsing), service, API, database constraints, imports, allocation,

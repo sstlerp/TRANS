@@ -5,7 +5,7 @@
 # Schedule daily (e.g. 01:30) and copy the output off-server; keep ≥ 30 daily + 12 monthly copies.
 set -euo pipefail
 DEST="${1:-/var/backups/trans-erp}"
-DB="${ERP_DB_NAME:-trans_erp}"
+DB="${ERP_DB_NAME:-ERP_LOGISTICS}"
 STORAGE="${ERP_STORAGE_DIR:-$(dirname "$0")/../storage}"
 STAMP="$(date +%Y%m%d_%H%M%S)"
 mkdir -p "$DEST"
