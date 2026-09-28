@@ -1,0 +1,5 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="vnd-toolbar"><span class="vnd-toolbar-title"><i class="ti ti-lock"></i> Access denied</span></div>
+<div class="note note-err"><i class="ti ti-lock"></i><div>You do not have permission <span class="code">{{ perm }}</span> for this page. Ask an administrator to grant it to your role.</div></div>
+{% endblock %}

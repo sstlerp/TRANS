@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en-IN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}{{ app_name }}{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/vendor/tabler-icons/tabler-icons.min.css">
+<link rel="stylesheet" href="/static/css/erp.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="app-header">
+  <button class="hdr-btn" id="side-toggle" aria-label="Toggle menu"><i class="ti ti-menu-2"></i></button>
+  <a class="app-brand" href="/"><i class="ti ti-truck-delivery"></i><span>{{ app_name }}<small>{{ brand_company_name }}</small></span></a>
+  {% block nav_extra %}{% endblock %}
+  <div class="hdr-search"><i class="ti ti-search"></i>
+    <input id="global-search" placeholder="Search vehicle, driver, tyre, invoice, UTR…" autocomplete="off">
+    <div class="hdr-search-results" id="global-search-results"></div></div>
+  <span class="hdr-date"><i class="ti ti-calendar"></i> {{ today }}</span>
+  <a class="hdr-btn" href="/masters/notifications?f_is_read=0" title="Alerts"><i class="ti ti-bell"></i><span class="hdr-badge" id="notif-count" style="display:none"></span></a>
+  <div class="hdr-user"><i class="ti ti-user-circle"></i><span>{{ user.full_name if user else '' }}</span>
+    <a class="hdr-btn" href="/account/password" title="Change password"><i class="ti ti-key"></i></a>
+    <a class="hdr-btn" href="/docs" title="API documentation" target="_blank" rel="noopener"><i class="ti ti-api"></i></a>
+    <a class="hdr-btn" href="/logout" title="Sign out"><i class="ti ti-logout"></i></a></div>
+</header>
+<div class="app-shell">
+  <nav class="app-side" aria-label="Main menu">
+    {% for group, items in nav %}
+    <div class="nav-group {% if not loop.first %}closed{% endif %}" data-g="{{ group }}">
+      <div class="nav-group-h">{{ group }} <i class="ti ti-chevron-down"></i></div>
+      <div class="nav-items">
+        {% for label, url, icon, perm in items %}<a href="{{ url }}"><i class="ti {{ icon }}"></i>{{ label }}</a>{% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+  </nav>
+  <main class="app-main">{% block content %}{% endblock %}</main>
+</div>
+<div class="vnd-toast" id="vnd-toast"></div>
+<script src="/static/js/erp.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

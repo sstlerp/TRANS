@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Dashboard · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-dashboard" style="margin-right:.3rem"></i> Executive Dashboard</span></div>
+    <div class="vnd-tb-right">
+      {% if user.has('admin.edit') %}<button class="tb-btn tb-btn--ghost" id="run-jobs" title="Refresh renewal statuses and generate alerts"><i class="ti ti-player-play"></i> Run daily checks</button>{% endif %}
+      <button class="tb-btn tb-btn--new" id="refresh"><i class="ti ti-refresh"></i> Refresh</button>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="dash-grid" id="dash">
+      <div class="card c12"><div class="card-b"><div class="tbl-empty"><i class="ti ti-loader-2"></i>Loading…</div></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const { $, esc, get, post, money, num, ddmmyyyy, pill, toast, errToast } = ERP;
+  const kpi = (label, v, cls = '', href = '', sub = '') =>
+    `<a class="kpi ${cls}" ${href ? `href="${href}"` : ''}><div class="l">${esc(label)}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</a>`;
+  const rupee = v => '₹ ' + money(v);
+  const bars = (rows, lk, vk, fmt = x => num(x, 0)) => {
+    const max = Math.max(1, ...rows.map(r => Number(r[vk]) || 0));
+    return `<div class="bars">${rows.map(r => `<div class="bar-row"><span>${esc(r[lk] || '—')}</span><div class="bar-track"><div class="bar-fill" style="width:${(Number(r[vk]) || 0) / max * 100}%"></div></div><b style="text-align:right">${fmt(r[vk])}</b></div>`).join('') || '<div class="tbl-empty">No data</div>'}</div>`;
+  };
+  async function load() {
+    let d;
+    try { d = await get('/api/dashboard'); } catch (e) { return errToast(e); }
+    const f = d.fleet, c = d.compliance, fi = d.finance, o = d.operations, a = d.alerts;
+    $('#dash').innerHTML = `
+    <div class="card c4"><div class="card-h"><i class="ti ti-truck"></i> Fleet<a href="/masters/vehicles">Vehicles →</a></div><div class="card-b">
+      <div class="kpis">${kpi('Total vehicles', f.total, 'blue', '/masters/vehicles?active=all')}${kpi('Active', f.active, 'green', '/masters/vehicles')}${kpi('Inactive', f.inactive, f.inactive ? 'amber' : '', '/masters/vehicles?active=0')}</div>
+      <div style="margin-top:.6rem;font:700 .6rem 'Sora',system-ui,sans-serif;color:#0369A1;text-transform:uppercase;letter-spacing:.08em">By category</div>${bars(f.by_category, 'label', 'count')}
+      <div style="margin-top:.5rem;font:700 .6rem 'Sora',system-ui,sans-serif;color:#0369A1;text-transform:uppercase;letter-spacing:.08em">By status</div>${bars(f.by_status, 'label', 'count')}
+    </div></div>
+    <div class="card c8"><div class="card-h"><i class="ti ti-certificate"></i> Compliance &amp; Renewals<a href="/compliance">Renewal dashboard →</a></div><div class="card-b"><div class="kpis">
+      ${kpi('Due today', c.due_today, c.due_today ? 'red' : '', '/compliance')}${kpi('Due ≤ 7 days', c.due_7, c.due_7 ? 'amber' : '', '/compliance')}
+      ${kpi('Due ≤ 15 days', c.due_15, '', '/compliance')}${kpi('Due ≤ 30 days', c.due_30, '', '/compliance')}
+      ${kpi('Expired', c.expired, c.expired ? 'red' : 'green', '/masters/vehicle_renewals?f_status=EXPIRED')}
+      ${kpi('Renewed (30 d)', c.renewed_30, 'green')}${kpi('Pending documents', c.pending_documents, c.pending_documents ? 'amber' : '', '/compliance')}
+      ${kpi('Pending payment', c.pending_payment, c.pending_payment ? 'amber' : '', '/masters/vehicle_renewals?f_payment_status=PENDING')}
+      ${kpi('Insurance ≤ 30 d', c.insurance_due_30, c.insurance_due_30 ? 'amber' : '', '/masters/insurance_policies')}${kpi('Insurance expired', c.insurance_expired, c.insurance_expired ? 'red' : '', '/masters/insurance_policies')}
+      ${kpi('Permit ≤ 30 d / exp.', `${c.permit_due_30} / ${c.permit_expired}`, c.permit_expired ? 'red' : '', '/masters/vehicle_renewals?category=PERMIT')}
+      ${kpi('Fitness ≤ 30 d / exp.', `${c.fitness_due_30} / ${c.fitness_expired}`, c.fitness_expired ? 'red' : '', '/masters/vehicle_renewals?category=FITNESS')}
+      ${kpi('PUCC ≤ 30 d / exp.', `${c.pucc_due_30} / ${c.pucc_expired}`, c.pucc_expired ? 'red' : '', '/masters/vehicle_renewals?category=PUCC')}
+      ${kpi('PESO ≤ 30 d / exp.', `${c.peso_due_30} / ${c.peso_expired}`, c.peso_expired ? 'red' : '', '/masters/vehicle_renewals?category=PESO')}
+    </div></div></div>
+    <div class="card c7"><div class="card-h"><i class="ti ti-building-bank"></i> Finance &amp; Reconciliation<a href="/finance/reconciliation">Workbench →</a></div><div class="card-b"><div class="kpis">
+      ${kpi('Unmatched credits', fi.unmatched_credits, fi.unmatched_credits ? 'red' : 'green', '/finance/reconciliation?dir=CR', rupee(fi.unmatched_credit_amount))}
+      ${kpi('Unmatched debits', fi.unmatched_debits, fi.unmatched_debits ? 'red' : 'green', '/finance/reconciliation?dir=DR', rupee(fi.unmatched_debit_amount))}
+      ${kpi('Partially matched', fi.partially_matched, fi.partially_matched ? 'amber' : '', '/finance/reconciliation?status=PARTIALLY_MATCHED')}
+      ${kpi('Suggestions to review', fi.suggested, fi.suggested ? 'amber' : '', '/finance/reconciliation?status=AUTO_SUGGESTED')}
+      ${kpi('Pending approvals', fi.pending_approvals, fi.pending_approvals ? 'amber' : '', '/masters/approval_requests?f_status=PENDING')}
+      ${kpi('Receivables', rupee(fi.receivables), 'blue', '/reports?r=receivables', 'overdue ' + rupee(fi.overdue_receivables))}
+    </div>
+    <table class="vnd-table" style="margin-top:.6rem"><thead><tr><th>Bank account</th><th class="num">Balance (last statement)</th><th>As of</th><th>Last import</th></tr></thead><tbody>
+      ${fi.accounts.map(x => `<tr><td>${esc(x.code)} — ${esc(x.name)}</td><td class="num">${x.balance !== null ? rupee(x.balance) : '—'}</td><td>${ddmmyyyy(x.as_of) || '—'}</td><td>${ddmmyyyy(x.last_import) || '<span style="color:#B45309">never</span>'}</td></tr>`).join('') || '<tr><td colspan=4 class="tbl-empty">No bank accounts</td></tr>'}
+    </tbody></table>
+    <div class="fg2" style="margin-top:.5rem"><div><div class="card-h" style="background:none;padding:.2rem 0">Recent receipts</div><ul class="mini-list">
+      ${fi.recent_receipts.map(r => `<li>${ddmmyyyy(r.date)} ${pill(r.status)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%">${esc(r.narration || '')}</span><span class="amt dir-cr">${rupee(r.amount)}</span></li>`).join('') || '<li>None</li>'}</ul></div>
+      <div><div class="card-h" style="background:none;padding:.2rem 0">Recent payments</div><ul class="mini-list">
+      ${fi.recent_payments.map(r => `<li>${ddmmyyyy(r.date)} ${pill(r.status)}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:45%">${esc(r.narration || '')}</span><span class="amt dir-dr">${rupee(r.amount)}</span></li>`).join('') || '<li>None</li>'}</ul></div></div>
+    </div></div>
+    <div class="card c5"><div class="card-h"><i class="ti ti-alert-triangle"></i> Alerts &amp; Unresolved Items<a href="/masters/notifications?f_is_read=0">All alerts →</a></div><div class="card-b"><div class="kpis">
+      ${kpi('Import errors', a.import_errors, a.import_errors ? 'red' : 'green', '/masters/import_errors?f_resolved=0&f_severity=ERROR')}
+      ${kpi('Toll: vehicle unmatched', a.toll_vehicle_unmatched, a.toll_vehicle_unmatched ? 'red' : 'green', '/masters/toll_transactions?f_status=VEHICLE_UNMATCHED')}
+      ${kpi('Toll: plaza unmatched', a.toll_plaza_unmatched, a.toll_plaza_unmatched ? 'amber' : 'green', '/masters/toll_transactions?f_plaza_match_status=PLAZA_UNMATCHED')}
+      ${kpi('Fuel: vehicle unmatched', a.fuel_vehicle_unmatched, a.fuel_vehicle_unmatched ? 'red' : 'green', '/masters/fuel_transactions?f_status=VEHICLE_UNMATCHED')}
+      ${kpi('Fuel: flagged', a.fuel_flagged, a.fuel_flagged ? 'amber' : 'green', '/masters/fuel_transactions?f_status=FLAGGED')}
+      ${kpi('Tyres: low tread', a.tyre_low_tread, a.tyre_low_tread ? 'amber' : 'green', '/tyres/dashboard')}
+      ${kpi('Tyre warranty ≤ 30 d', a.tyre_warranty_expiring, '', '/masters/tyres')}
+      ${kpi('Maintenance due', a.maintenance_due, a.maintenance_due ? 'amber' : 'green', '/masters/notifications?f_event_type=MAINTENANCE_DUE')}
+    </div><ul class="mini-list" style="margin-top:.5rem">${a.critical.map(n => `<li><span class="pill pill-${n.severity === 'CRITICAL' ? 'red' : n.severity === 'WARNING' ? 'amber' : 'blue'}">${esc(n.severity)}</span><a href="${esc(n.link || '#')}" style="text-decoration:none;color:inherit">${esc(n.title)}</a></li>`).join('') || '<li style="color:#047857"><i class="ti ti-circle-check"></i> No unread alerts</li>'}</ul></div></div>
+    <div class="card c12"><div class="card-h"><i class="ti ti-gauge"></i> Operations — month to date (from ${ddmmyyyy(o.month_start)})<a href="/reports?r=profitability">Profitability →</a></div><div class="card-b">
+      <div class="kpis">${kpi('Fuel cost', rupee(o.fuel_cost), '', '/reports?r=fuel_summary')}${kpi('Toll cost', rupee(o.toll_cost), '', '/reports?r=toll_summary')}
+        ${kpi('Maintenance cost', rupee(o.maintenance_cost), '', '/reports?r=maintenance_summary')}${kpi('Tyre cost', rupee(o.tyre_cost), '', '/reports?r=tyre_cost')}
+        ${kpi('Total operating cost', rupee(o.total_cost), 'blue', '/reports?r=profitability')}${kpi('Cost / vehicle', rupee(o.cost_per_vehicle))}
+        ${kpi('KM run', num(o.km, 0))}${kpi('Cost / KM', o.cost_per_km !== null ? '₹ ' + money(o.cost_per_km) : '—')}</div>
+      <div style="margin-top:.6rem;font:700 .6rem 'Sora',system-ui,sans-serif;color:#0369A1;text-transform:uppercase;letter-spacing:.08em">Top vehicles by cost</div>
+      ${bars(o.top_vehicles, 'vehicle', 'cost', v => '₹ ' + money(v))}
+    </div></div>`;
+  }
+  $('#refresh').onclick = load;
+  if ($('#run-jobs')) $('#run-jobs').onclick = async () => {
+    try { const r = await post('/api/admin/jobs/daily'); toast(`Checks complete: ${r.renewal_alerts} renewal alert(s), ${r.maintenance_alerts} maintenance alert(s)`); load(); }
+    catch (e) { errToast(e); }
+  };
+  load();
+})();
+</script>
+{% endblock %}

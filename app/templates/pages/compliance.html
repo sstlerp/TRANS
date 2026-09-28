@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Renewal Dashboard · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-calendar-due" style="margin-right:.3rem"></i> Compliance · Renewal Dashboard &amp; Calendar</span></div>
+    <div class="vnd-tb-right">
+      <a class="tb-btn tb-btn--ghost" href="/masters/insurance_policies"><i class="ti ti-shield-check"></i> Insurance</a>
+      <a class="tb-btn tb-btn--ghost" href="/masters/renewal_assignments"><i class="ti ti-list-check"></i> Renewal slots</a>
+      <a class="tb-btn tb-btn--new" href="/masters/vehicle_renewals"><i class="ti ti-plus"></i> New renewal record</a>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="party-tabs" id="cats"></div>
+    <div class="dash-grid">
+      <div class="card c12"><div class="card-h"><i class="ti ti-alarm"></i> Status</div><div class="card-b"><div class="kpis" id="kpis"></div></div></div>
+      <div class="card c12"><div class="card-h"><i class="ti ti-calendar"></i> Expiry calendar
+        <span style="margin-left:auto;display:flex;gap:.3rem;align-items:center;text-transform:none;letter-spacing:0">
+          <button class="ra-btn ra-edit" id="prev"><i class="ti ti-chevron-left"></i></button><b id="month" style="font:700 .72rem 'Sora',system-ui,sans-serif;color:#0F172A;min-width:130px;text-align:center"></b>
+          <button class="ra-btn ra-edit" id="next"><i class="ti ti-chevron-right"></i></button></span></div>
+        <div class="card-b"><div id="cal"></div></div></div>
+      <div class="card c12"><div class="card-h"><i class="ti ti-list"></i> Due in the next 60 days / expired</div><div class="card-b" style="padding:0">
+        <div class="vnd-table-scroll" style="max-height:420px"><table class="vnd-table"><thead><tr><th>Expiry</th><th>Days</th><th>Vehicle / Driver</th><th>Type</th><th>Status</th><th></th></tr></thead><tbody id="due"></tbody></table></div></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const { $, $$, esc, get, ddmmyyyy, pill, errToast } = ERP;
+  const P = new URLSearchParams(location.search);
+  const CATS = [['', 'All'], ['TAX', 'Road Tax / QTAX'], ['PERMIT', 'Permits'], ['FITNESS', 'Fitness'], ['PUCC', 'PUCC'], ['PESO', 'PESO'], ['HAZMAT', 'Hazmat'], ['LICENSE', 'Driver']];
+  let cat = P.get('category') || (P.get('applies') === 'DRIVER' ? 'LICENSE' : '');
+  const cur = new Date(); cur.setDate(1);
+  const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  const dmy = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+  function tabs() {
+    $('#cats').innerHTML = CATS.map(c => `<span class="party-tab ${cat === c[0] ? 'party-tab--active' : ''}" data-c="${c[0]}">${c[1]}</span>`).join('');
+    $$('#cats .party-tab').forEach(t => t.onclick = () => { cat = t.dataset.c; tabs(); load(); });
+  }
+  const K = (l, v, cls, href) => `<a class="kpi ${cls}" href="${href}"><div class="l">${l}</div><div class="v">${v}</div></a>`;
+  async function load() {
+    try {
+      const d = await get('/api/compliance/dashboard', { category: cat });
+      const base = '/masters/vehicle_renewals?' + (cat ? 'category=' + cat + '&' : '');
+      $('#kpis').innerHTML = K('Due today', d.due_today, d.due_today ? 'red' : '', base) + K('Due ≤ 7 days', d.due_7, d.due_7 ? 'amber' : '', base) +
+        K('Due ≤ 15 days', d.due_15, '', base) + K('Due ≤ 30 days', d.due_30, '', base) + K('Expired', d.expired, d.expired ? 'red' : 'green', base + 'f_status=EXPIRED') +
+        K('Renewed (30 d)', d.renewed_30, 'green', base + 'f_status=RENEWED&f_is_current=0') + K('Pending documents', d.pending_documents, d.pending_documents ? 'amber' : '', base) +
+        K('Pending payment', d.pending_payment, d.pending_payment ? 'amber' : '', base + 'f_payment_status=PENDING') +
+        (cat ? '' : K('Insurance ≤ 30 d', d.insurance_due_30, d.insurance_due_30 ? 'amber' : '', '/masters/insurance_policies') + K('Insurance expired', d.insurance_expired, d.insurance_expired ? 'red' : '', '/masters/insurance_policies?f_renewal_status=EXPIRED'));
+      const t = new Date(); const s = new Date(t); s.setDate(s.getDate() - 365); const e = new Date(t); e.setDate(e.getDate() + 60);
+      const list = await get('/api/compliance/calendar', { date_from: dmy(s), date_to: dmy(e), category: cat });
+      $('#due').innerHTML = list.map(x => { const days = Math.round((new Date(x.date) - new Date(iso(t))) / 864e5);
+        return `<tr><td>${ddmmyyyy(x.date)}</td><td style="font-weight:800;color:${days < 0 ? '#B91C1C' : days <= 7 ? '#B45309' : '#0F172A'}">${days}</td><td>${esc(x.entity)}</td><td>${esc(x.type)}</td><td>${pill(x.status)}</td>
+          <td><a class="ra-btn ra-edit" href="/masters/${x.kind === 'insurance' ? 'insurance_policies' : 'vehicle_renewals'}?id=${x.id}"><i class="ti ti-external-link"></i> Open / renew</a></td></tr>`; }).join('')
+        || '<tr><td colspan=6><div class="tbl-empty">Nothing due</div></td></tr>';
+      cal();
+    } catch (e) { errToast(e); }
+  }
+  async function cal() {
+    const s = new Date(cur), e = new Date(cur.getFullYear(), cur.getMonth() + 1, 0);
+    $('#month').textContent = s.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+    const ev = await get('/api/compliance/calendar', { date_from: dmy(s), date_to: dmy(e), category: cat });
+    const by = {}; ev.forEach(x => (by[x.date] = by[x.date] || []).push(x));
+    const first = (s.getDay() + 6) % 7; let html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:3px">' +
+      ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<div style="font:700 .6rem 'Sora',system-ui,sans-serif;color:#64748B;text-align:center">${d}</div>`).join('');
+    for (let i = 0; i < first; i++) html += '<div></div>';
+    for (let d = 1; d <= e.getDate(); d++) {
+      const k = iso(new Date(s.getFullYear(), s.getMonth(), d)); const items = by[k] || []; const today = k === iso(new Date());
+      html += `<div style="min-height:70px;border:1px solid ${today ? '#0EA5E9' : '#E2E8F0'};border-radius:6px;padding:2px 4px;background:${items.length ? '#FFFBEB' : '#fff'}">
+        <div style="font:700 .62rem 'Sora',system-ui,sans-serif;color:${today ? '#0369A1' : '#64748B'}">${d}</div>${items.slice(0, 3).map(x => `<a href="/masters/${x.kind === 'insurance' ? 'insurance_policies' : 'vehicle_renewals'}?id=${x.id}" style="display:block;font-size:.58rem;text-decoration:none;color:${x.status === 'EXPIRED' ? '#B91C1C' : '#92400E'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(x.entity)} · ${esc(x.type)}</a>`).join('')}
+        ${items.length > 3 ? `<div style="font-size:.56rem;color:#64748B">+${items.length - 3} more</div>` : ''}</div>`;
+    }
+    $('#cal').innerHTML = html + '</div>';
+  }
+  $('#prev').onclick = () => { cur.setMonth(cur.getMonth() - 1); cal(); };
+  $('#next').onclick = () => { cur.setMonth(cur.getMonth() + 1); cal(); };
+  tabs(); load();
+})();
+</script>
+{% endblock %}

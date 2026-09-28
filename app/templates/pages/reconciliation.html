@@ -1,0 +1,242 @@
+{% extends "base.html" %}
+{% block title %}Bank Reconciliation · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-arrows-join-2" style="margin-right:.3rem"></i> Bank Reconciliation Workbench</span></div>
+    <div class="vnd-tb-right">
+      <button class="tb-btn tb-btn--ghost" id="auto"><i class="ti ti-wand"></i> Suggest matches</button>
+      <a class="tb-btn tb-btn--ghost" href="/imports?type=BANK"><i class="ti ti-file-import"></i> Import statement</a>
+      <a class="tb-btn tb-btn--new" href="/masters/bank_transactions"><i class="ti ti-plus"></i> Manual entry</a>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="party-tabs" id="tabs"></div>
+    <div class="wb">
+      <div class="vnd-list-wrap">
+        <div class="list-filters">
+          <div class="f-group"><label class="f-label">Bank account</label><select class="f-input" id="acct"><option value="">All accounts</option></select></div>
+          <div class="f-group" style="min-width:110px"><label class="f-label">From</label><input class="f-input" id="d1" placeholder="DD/MM/YYYY"></div>
+          <div class="f-group" style="min-width:110px"><label class="f-label">To</label><input class="f-input" id="d2" placeholder="DD/MM/YYYY"></div>
+          <div class="f-group" style="min-width:200px;max-width:320px"><label class="f-label">Search narration / UTR / ref</label><input class="f-input" id="q"></div>
+          <span class="list-count" id="cnt" style="margin-left:auto"></span>
+        </div>
+        <div class="vnd-table-scroll" style="max-height:calc(100vh - 290px)"><table class="vnd-table"><thead><tr>
+          <th>Date</th><th>Account</th><th>Narration</th><th>UTR / Ref</th><th class="num">Amount</th><th class="num">Unmatched</th><th>Class</th><th>Status</th></tr></thead>
+          <tbody id="list"></tbody></table></div>
+        <div class="pager"><span id="pinfo"></span><div class="pg-btns"><button class="ra-btn ra-edit" id="pp"><i class="ti ti-chevron-left"></i></button><span id="pno"></span><button class="ra-btn ra-edit" id="pn"><i class="ti ti-chevron-right"></i></button></div></div>
+      </div>
+      <div class="wb-detail"><div class="card"><div class="card-h"><i class="ti ti-receipt"></i> <span id="dt-title">Select a transaction</span></div>
+        <div class="card-b" id="detail"><div class="tbl-empty"><i class="ti ti-hand-click"></i>Pick a bank transaction on the left to classify, match or allocate it.<br>Unmatched items stay unmatched until a user acts — nothing is allocated automatically.</div></div></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const { $, $$, esc, get, post, toast, errToast, money, ddmmyyyy, pill, options, fillSelect, modal, confirmBox, maskDate, lookups } = ERP;
+  const P = new URLSearchParams(location.search);
+  const TABS = [
+    ['ucr', 'Unmatched credits', { f_direction: 'CR', f_recon_status: 'UNMATCHED,AUTO_SUGGESTED,PARTIALLY_MATCHED' }],
+    ['udr', 'Unmatched debits', { f_direction: 'DR', f_recon_status: 'UNMATCHED,AUTO_SUGGESTED,PARTIALLY_MATCHED' }],
+    ['sug', 'Suggested', { f_recon_status: 'AUTO_SUGGESTED' }], ['par', 'Partially matched', { f_recon_status: 'PARTIALLY_MATCHED' }],
+    ['pen', 'Pending approval', { f_recon_status: 'PENDING_APPROVAL' }], ['done', 'Matched / allocated', { f_recon_status: 'MATCHED,ALLOCATED' }],
+    ['ign', 'Ignored', { f_recon_status: 'IGNORED' }], ['all', 'All', {}]];
+  const S = { tab: P.get('dir') === 'DR' ? 'udr' : P.get('status') === 'AUTO_SUGGESTED' ? 'sug' : P.get('status') === 'PARTIALLY_MATCHED' ? 'par' : P.get('batch') ? 'all' : 'ucr', page: 1, sel: null, rows: [] };
+  const TARGET_LABEL = { INVOICE: 'Invoice', CONTRACT: 'Contract (on-account / advance)', FUEL: 'Fuel transactions', TOLL: 'Toll transactions', MAINTENANCE: 'Maintenance job cards',
+    TYRE: 'Tyre purchases', TYRE_RETREAD: 'Tyre retreading', INSURANCE: 'Insurance policies', RENEWAL: 'Tax / permit / PESO renewals', EXPENSE: 'Vendor invoices / expenses', BANK: 'Bank transactions' };
+
+  function renderTabs() {
+    $('#tabs').innerHTML = TABS.map(t => `<span class="party-tab ${S.tab === t[0] ? 'party-tab--active' : ''}" data-t="${t[0]}">${t[1]}</span>`).join('');
+    $$('#tabs .party-tab').forEach(x => x.onclick = () => { S.tab = x.dataset.t; S.page = 1; renderTabs(); load(); });
+  }
+  async function load() {
+    const t = TABS.find(x => x[0] === S.tab)[2];
+    const p = { ...t, page: S.page, size: 50, sort: 'txn_date', dir: 'desc', f_bank_account_id: $('#acct').value, date_from: $('#d1').value, date_to: $('#d2').value, q: $('#q').value, f_import_batch_id: P.get('batch') || '' };
+    try {
+      const d = await get('/api/masters/bank_transactions', p);
+      S.rows = d.items;
+      $('#list').innerHTML = d.items.map(r => `<tr class="clickable ${S.sel === r.id ? 'selected' : ''}" data-id="${r.id}"><td style="white-space:nowrap">${ddmmyyyy(r.txn_date)}</td>
+        <td>${esc((r.bank_account_id__label || '').split(' — ')[0])}</td><td style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.narration)}">${esc(r.narration || '')}</td>
+        <td style="font-size:.66rem">${esc(r.utr || r.reference_number || '')}</td><td class="num ${r.direction === 'CR' ? 'dir-cr' : 'dir-dr'}">${r.direction === 'CR' ? '+' : '−'} ${money(r.credit > 0 ? r.credit : r.debit)}</td>
+        <td class="num">${money(r.unmatched_amount)}</td><td>${pill(r.classification)}</td><td>${pill(r.recon_status)}</td></tr>`).join('') || '<tr><td colspan=8><div class="tbl-empty"><i class="ti ti-circle-check"></i>Nothing here</div></td></tr>';
+      $$('#list tr.clickable').forEach(tr => tr.onclick = () => select(+tr.dataset.id));
+      const pages = Math.max(1, Math.ceil(d.total / d.size));
+      $('#cnt').textContent = `${d.total} transaction(s)`; $('#pno').textContent = `${d.page}/${pages}`;
+      $('#pinfo').textContent = `${d.total ? (d.page - 1) * d.size + 1 : 0}–${Math.min(d.page * d.size, d.total)} of ${d.total}`;
+      $('#pp').onclick = () => { if (S.page > 1) { S.page--; load(); } }; $('#pn').onclick = () => { if (S.page < pages) { S.page++; load(); } };
+    } catch (e) { errToast(e); }
+  }
+
+  async function select(id) {
+    S.sel = id; $$('#list tr').forEach(tr => tr.classList.toggle('selected', +tr.dataset.id === id));
+    let d, sg;
+    try { [d, sg] = await Promise.all([get(`/api/recon/${id}`), get(`/api/recon/${id}/suggestions`)]); } catch (e) { return errToast(e); }
+    const t = d.txn, cr = t.direction === 'CR', open = !['IGNORED'].includes(t.recon_status) && Number(t.unmatched_amount) > 0;
+    $('#dt-title').innerHTML = `${cr ? 'Credit' : 'Debit'} #${t.id} · ${ddmmyyyy(t.txn_date)} ${pill(t.recon_status)}`;
+    const h = sg.hints || {};
+    const btn = (k, i, l, cls = 'ra-edit') => `<button class="ra-btn ${cls}" data-a="${k}"><i class="ti ${i}"></i> ${l}</button>`;
+    const acts = cr ? [
+      btn('INVOICE_RECEIPT:INVOICE', 'ti-file-invoice', 'Match invoice(s)'), btn('CONTRACT_RECEIPT:CONTRACT', 'ti-file-certificate', 'Match contract income / advance'),
+      btn('REFUND:REF', 'ti-receipt-refund', 'Match refund'), btn('CASHBACK:REF', 'ti-gift', 'Match cashback'), btn('REBATE:REF', 'ti-discount', 'Match rebate'),
+      btn('REVERSAL:BANK', 'ti-arrow-back-up', 'Match reversal'), btn('INTERNAL_TRANSFER:BANK', 'ti-arrows-left-right', 'Match internal transfer'),
+      btn('classify', 'ti-tag', 'Classify credit', 'ra-act'), btn('alloc', 'ti-chart-pie', 'Create other income / receipt', 'ra-act')]
+      : [btn('alloc', 'ti-chart-pie', 'Allocate / split to cost centers', 'ra-act'), btn('FUEL_PAYMENT:FUEL', 'ti-gas-station', 'Match fuel'),
+      btn('TOLL_PAYMENT:TOLL', 'ti-road', 'Match toll'), btn('MAINTENANCE_PAYMENT:MAINTENANCE', 'ti-tools', 'Match maintenance'),
+      btn('TYRE_PAYMENT:TYRE', 'ti-circle-dashed', 'Match tyre'), btn('INSURANCE_PAYMENT:INSURANCE', 'ti-shield', 'Match insurance'),
+      btn('TAX_PAYMENT:RENEWAL', 'ti-receipt-tax', 'Match tax'), btn('PERMIT_PAYMENT:RENEWAL', 'ti-map-route', 'Match permit'), btn('PESO_PAYMENT:RENEWAL', 'ti-flame', 'Match PESO'),
+      btn('VENDOR_PAYMENT:EXPENSE', 'ti-receipt-2', 'Match vendor invoice'), btn('asset', 'ti-building-factory', 'Asset purchase'),
+      btn('INTERNAL_TRANSFER:BANK', 'ti-arrows-left-right', 'Internal transfer'), btn('REVERSAL:BANK', 'ti-arrow-back-up', 'Reversal'), btn('classify', 'ti-tag', 'Classify', 'ra-act')];
+    $('#detail').innerHTML = `
+      <div style="font-size:.74rem;margin-bottom:.3rem"><b>${esc(t.bank_account_id__label || '')}</b><br>${esc(t.narration || '')}</div>
+      <div style="font-size:.66rem;color:#64748B">UTR <span class="code">${esc(t.utr || '—')}</span> · Ref <span class="code">${esc(t.reference_number || '—')}</span> · Value date ${ddmmyyyy(t.value_date) || '—'} · Source ${esc(t.source_type)}${t.source_file ? ` (${esc(t.source_file)} row ${t.source_row})` : ''}</div>
+      <div class="amt-strip"><div><div class="l">Amount</div><div class="v ${cr ? 'dir-cr' : 'dir-dr'}">₹ ${money(t.credit > 0 ? t.credit : t.debit)}</div></div>
+        <div><div class="l">Matched / allocated</div><div class="v">₹ ${money(t.matched_amount)}</div></div><div><div class="l">Unmatched</div><div class="v" style="color:${Number(t.unmatched_amount) ? '#B91C1C' : '#047857'}">₹ ${money(t.unmatched_amount)}</div></div>
+        <div><div class="l">Classification</div><div class="v" style="font-size:.7rem">${esc(t.classification)}</div></div></div>
+      ${Object.keys(h).length ? `<div class="note note-info"><i class="ti ti-bulb"></i><div>${h.vendor ? `Suggested vendor: <b>${esc(h.vendor.label)}</b>. ` : ''}${h.cost_center ? `Suggested cost center: <b>${esc(h.cost_center.label)}</b>. ` : ''}${h.expense_type ? `Suggested expense type: <b>${esc(h.expense_type.label)}</b>. ` : ''}${h.credit_type ? `Suggested credit type: <b>${esc(h.credit_type.label)}</b>. ` : ''}${h.rule ? `Matching rule: <b>${esc(h.rule.name)}</b> (${esc(h.rule.link_type)}).` : ''}</div></div>` : ''}
+      ${open ? `<div class="row-actions" style="margin:.3rem 0 .6rem">${acts.join('')}${btn('keep', 'ti-hand-stop', 'Keep unmatched', 'ra-deact')}${btn('ignore', 'ti-eye-off', 'Ignore', 'ra-del')}</div>` :
+        t.recon_status === 'IGNORED' ? `<div class="row-actions">${btn('unignore', 'ti-eye', 'Un-ignore')}</div>` : ''}
+      <div class="card-h" style="background:none;padding:.3rem 0"><i class="ti ti-bulb"></i> Suggested matches (review before accepting)</div>
+      ${sg.candidates.length && open ? sg.candidates.map((c, i) => `<div class="cand"><span class="score">${c.score}</span><div style="flex:1;min-width:0"><b>${esc(c.label)} #${c.id}</b> · ${esc(c.reference || '')} ${c.party ? '· ' + esc(c.party) : ''} · ${ddmmyyyy(c.date)}<br>
+        <span class="why">${esc(c.link_type.replace(/_/g, ' '))} — ${esc(c.reasons.join(', '))} · open ₹ ${money(c.amount)}</span></div>
+        <button class="ra-btn ra-act" data-c="${i}"><i class="ti ti-link"></i> ₹ ${money(c.suggested_amount)}</button></div>`).join('') : '<div class="tbl-empty" style="padding:.6rem">No suggestions</div>'}
+      <div class="card-h" style="background:none;padding:.3rem 0;margin-top:.4rem"><i class="ti ti-link"></i> Financial links</div>
+      <table class="vnd-table"><tbody>${d.links.map(l => `<tr><td>${pill(l.match_status)}</td><td>${esc(l.link_type)}</td><td>${esc(l.other.label)} #${l.other.id} <span style="color:#64748B">${esc(l.other.reference || '')}</span></td>
+        <td class="num">₹ ${money(l.linked_amount)}</td><td style="font-size:.6rem">${esc(l.matching_method)}${l.match_score ? ' ' + l.match_score : ''}</td><td>
+        ${l.match_status === 'AUTO_SUGGESTED' ? `<button class="ra-btn ra-act" data-acc="${l.id}"><i class="ti ti-check"></i></button><button class="ra-btn ra-del" data-rej="${l.id}"><i class="ti ti-x"></i></button>` : ''}
+        ${['MATCHED', 'PENDING_APPROVAL'].includes(l.match_status) ? `<button class="ra-btn ra-del" data-un="${l.id}" title="Unmatch"><i class="ti ti-unlink"></i></button>` : ''}</td></tr>`).join('') || '<tr><td class="tbl-empty">None</td></tr>'}</tbody></table>
+      <div class="card-h" style="background:none;padding:.3rem 0;margin-top:.4rem"><i class="ti ti-chart-pie"></i> Cost-center allocations</div>
+      <table class="vnd-table"><tbody>${d.allocations.map(a => `<tr><td>${pill(a.status)}</td><td>${esc(a.cost_center_id__label || '')}</td><td>${esc(a.expense_type_id__label || a.credit_type_id__label || '')}</td>
+        <td class="num">₹ ${money(a.amount)}</td><td>${a.status !== 'REVERSED' ? `<button class="ra-btn ra-del" data-rev="${a.id}" title="Reverse"><i class="ti ti-arrow-back-up"></i></button>` : ''}</td></tr>`).join('') || '<tr><td class="tbl-empty">None</td></tr>'}</tbody></table>
+      <details style="margin-top:.5rem"><summary style="font-size:.7rem;cursor:pointer;color:#0369A1">Reconciliation history (${d.history.length})</summary>
+        <ul class="timeline" style="margin-top:.4rem">${d.history.map(x => `<li><span class="t">${esc(x.action)}</span> ${x.amount ? '₹ ' + money(x.amount) : ''} <span class="d">${ERP.dt(x.performed_at)} · ${esc(x.old_status || '')} → ${esc(x.new_status || '')}</span><br><span style="font-size:.64rem">${esc(x.remarks || '')}</span></li>`).join('')}</ul></details>`;
+    $$('#detail [data-a]').forEach(b => b.onclick = () => act(b.dataset.a, t, h));
+    $$('#detail [data-c]').forEach(b => b.onclick = () => { const c = sg.candidates[+b.dataset.c]; doLink(t, c.link_type, [{ type: c.type, id: c.id, amount: c.suggested_amount }]); });
+    $$('#detail [data-un]').forEach(b => b.onclick = async () => { const r = await confirmBox('Unmatch this link? The bank row returns to unmatched.', { reason: true, danger: true }); if (r) call(`/api/recon/links/${b.dataset.un}/unlink`, { reason: r }); });
+    $$('#detail [data-acc]').forEach(b => b.onclick = () => call(`/api/recon/links/${b.dataset.acc}/accept`));
+    $$('#detail [data-rej]').forEach(b => b.onclick = () => call(`/api/recon/links/${b.dataset.rej}/reject`, { reason: 'Rejected suggestion' }));
+    $$('#detail [data-rev]').forEach(b => b.onclick = async () => { const r = await confirmBox('Reverse this allocation?', { reason: true, danger: true }); if (r) call(`/api/recon/allocations/${b.dataset.rev}/reverse`, { reason: r }); });
+  }
+  async function call(url, body) {
+    try { const r = await post(url, body || {}); toast(r.message || 'Done'); await load(); select(S.sel); } catch (e) { errToast(e); }
+  }
+  async function doLink(t, lt, targets, extra = {}) {
+    try { const r = await post(`/api/recon/${t.id}/link`, { link_type: lt, targets, ...extra });
+      toast(r.status.includes('PENDING_APPROVAL') ? 'Match saved — pending approval' : 'Matched'); await load(); select(t.id); }
+    catch (e) { errToast(e); }
+  }
+  async function act(a, t, h) {
+    if (a === 'keep') { const r = await confirmBox('Keep this transaction explicitly unmatched (with a note)?', { reason: true }); if (r) call(`/api/recon/${t.id}/keep-unmatched`, { reason: r }); return; }
+    if (a === 'ignore') { const r = await confirmBox('Ignore this transaction in reconciliation? (It remains visible under "Ignored".)', { reason: true, danger: true }); if (r) call(`/api/recon/${t.id}/ignore`, { ignored: true, reason: r }); return; }
+    if (a === 'unignore') { const r = await confirmBox('Return to unmatched?', { reason: true }); if (r) call(`/api/recon/${t.id}/ignore`, { ignored: false, reason: r }); return; }
+    if (a === 'classify') return classify(t);
+    if (a === 'alloc') return allocate(t, h);
+    if (a === 'asset') return allocate(t, h, 'ASSET');
+    const [lt, tt] = a.split(':');
+    return pickTargets(t, lt, tt);
+  }
+  async function classify(t) {
+    const cr = t.direction === 'CR';
+    const m = modal({ title: `Classify ${cr ? 'credit' : 'debit'}`, icon: 'ti-tag', body: `<div class="fg2"><div class="f-group full"><label class="f-label">${cr ? 'Credit type' : 'Expense type'}</label><select class="f-input" id="ct"></select></div>
+      <div class="f-group full"><label class="f-label">Remarks</label><textarea class="f-input" id="rm"></textarea></div></div>
+      <div class="note note-info"><i class="ti ti-info-circle"></i><div>Classification alone does not create income or expense — match or allocate the amount afterwards.</div></div>`,
+      foot: `<button class="m-btn m-btn--cancel" data-x>Cancel</button><button class="m-btn m-btn--save" data-go>Save</button>` });
+    fillSelect($('#ct', m.el), await options(cr ? 'credit_types' : 'expense_types'), cr ? t.credit_type_id : t.expense_type_id);
+    m.el.querySelector('[data-x]').onclick = m.close;
+    m.el.querySelector('[data-go]').onclick = async () => { m.close(); call(`/api/recon/${t.id}/classify`, { [cr ? 'credit_type_id' : 'expense_type_id']: $('#ct', m.el).value || null, remarks: $('#rm', m.el).value }); };
+  }
+  async function allocate(t, h, forceExpense) {
+    const cr = t.direction === 'CR';
+    const [ccs, types, vendors] = await Promise.all([options('cost_centers'), options(cr ? 'credit_types' : 'expense_types'), options('vendors')]);
+    const assetId = forceExpense ? (types.find(x => x.label.startsWith(forceExpense)) || {}).id : null;
+    const m = modal({ title: `${cr ? 'Other income / receipt' : 'Allocate debit'} — ₹ ${money(t.unmatched_amount)} unmatched`, icon: 'ti-chart-pie', size: 'wide', body: `
+      <table class="child-tbl"><thead><tr><th>Cost center *</th><th>${cr ? 'Credit type' : 'Expense type'} *</th>${cr ? '' : '<th>Vendor</th>'}<th>Amount (₹) *</th><th>Remarks</th><th></th></tr></thead><tbody id="al"></tbody></table>
+      <div class="child-foot"><span><button class="ra-btn ra-edit" id="al-add"><i class="ti ti-plus"></i> Add line</button> <button class="ra-btn ra-edit" id="al-eq"><i class="ti ti-divide"></i> Split equally</button></span>
+        <span>Allocated <b id="al-tot">0.00</b> of <b>${money(t.unmatched_amount)}</b> · remaining <b id="al-rem"></b></span></div>
+      <label class="show-inactive-label"><input type="checkbox" id="al-part"> Save as partial allocation (only if partial allocation is enabled in business rules)</label>
+      <div class="note note-info"><i class="ti ti-info-circle"></i><div>Totals must equal the unmatched amount; over-allocation is always rejected. Large allocations may require approval.</div></div>`,
+      foot: `<button class="m-btn m-btn--cancel" data-x>Cancel</button><button class="m-btn m-btn--save" data-go><i class="ti ti-device-floppy"></i> Save allocation</button>` });
+    const tb = $('#al', m.el);
+    const add = (amt = '') => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `<td><select class="f-input" data-k="cost_center_id"></select></td><td><select class="f-input" data-k="${cr ? 'credit_type_id' : 'expense_type_id'}"></select></td>
+        ${cr ? '' : '<td><select class="f-input" data-k="vendor_id"></select></td>'}<td><input class="f-input" data-k="amount" style="text-align:right" value="${amt}"></td><td><input class="f-input" data-k="remarks"></td>
+        <td class="rm"><button class="ra-btn ra-del"><i class="ti ti-x"></i></button></td>`;
+      tb.appendChild(tr);
+      fillSelect(tr.querySelector('[data-k=cost_center_id]'), ccs, h.cost_center ? h.cost_center.id : '');
+      fillSelect(tr.querySelector(`[data-k=${cr ? 'credit_type_id' : 'expense_type_id'}]`), types, assetId || (cr ? h.credit_type?.id : h.expense_type?.id) || '');
+      if (!cr) fillSelect(tr.querySelector('[data-k=vendor_id]'), vendors, h.vendor ? h.vendor.id : '');
+      tr.querySelector('.ra-del').onclick = () => { tr.remove(); tot(); };
+      tr.querySelector('[data-k=amount]').oninput = tot; tot();
+    };
+    const tot = () => { const s = $$('[data-k=amount]', tb).reduce((a, e) => a + (parseFloat(e.value.replace(/,/g, '')) || 0), 0);
+      $('#al-tot', m.el).textContent = money(s); const rem = Number(t.unmatched_amount) - s; $('#al-rem', m.el).textContent = money(rem); $('#al-rem', m.el).style.color = Math.abs(rem) < 0.005 ? '#047857' : rem < 0 ? '#B91C1C' : '#B45309'; };
+    add(Number(t.unmatched_amount).toFixed(2));
+    $('#al-add', m.el).onclick = () => add('');
+    $('#al-eq', m.el).onclick = () => { const rows = $$('[data-k=amount]', tb); const n = rows.length; const each = Math.floor(Number(t.unmatched_amount) * 100 / n) / 100;
+      rows.forEach((e, i) => e.value = (i === n - 1 ? (Number(t.unmatched_amount) - each * (n - 1)) : each).toFixed(2)); tot(); };
+    m.el.querySelector('[data-x]').onclick = m.close;
+    m.el.querySelector('[data-go]').onclick = async () => {
+      const lines = $$('tr', tb).map(tr => Object.fromEntries($$('[data-k]', tr).map(e => [e.dataset.k, e.value.replace(/,/g, '') || null])));
+      try { const r = await post(`/api/recon/${t.id}/allocate`, { lines, allow_partial: $('#al-part', m.el).checked });
+        m.close(); toast(r.status === 'PENDING_APPROVAL' ? 'Allocation saved — pending approval' : 'Allocated'); await load(); select(t.id); }
+      catch (e) { errToast(e); }
+    };
+  }
+  async function pickTargets(t, lt, tt) {
+    const types = tt === 'REF' ? ['FUEL', 'TOLL', 'MAINTENANCE', 'TYRE', 'INSURANCE', 'RENEWAL', 'EXPENSE', 'BANK'] : [tt];
+    const cr = t.direction === 'CR';
+    const d0 = new Date(t.txn_date); const fmt = d => `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+    const from = new Date(d0); from.setDate(from.getDate() - (tt === 'INVOICE' || tt === 'CONTRACT' ? 365 : 60)); const to = new Date(d0); to.setDate(to.getDate() + 7);
+    const m = modal({ title: `${lt.replace(/_/g, ' ')} — ₹ ${money(t.unmatched_amount)} available`, icon: 'ti-link', size: 'xwide', body: `
+      <div class="list-filters" style="padding:.2rem 0 .5rem;background:none;border:none">
+        <div class="f-group"><label class="f-label">Type</label><select class="f-input" id="pt-type">${types.map(x => `<option value="${x}">${TARGET_LABEL[x]}</option>`).join('')}</select></div>
+        <div class="f-group" style="min-width:110px"><label class="f-label">From</label><input class="f-input" id="pt-d1" value="${fmt(from)}"></div>
+        <div class="f-group" style="min-width:110px"><label class="f-label">To</label><input class="f-input" id="pt-d2" value="${fmt(to)}"></div>
+        <div class="f-group"><label class="f-label">Search reference</label><input class="f-input" id="pt-q"></div>
+        <button class="ra-btn ra-edit" id="pt-go"><i class="ti ti-search"></i> Find</button></div>
+      <div class="vnd-table-scroll" style="max-height:48vh"><table class="vnd-table"><thead><tr><th><input type="checkbox" id="pt-all"></th><th>Date</th><th>Reference</th><th>Vehicle</th><th class="num">Total</th><th class="num">Open</th><th class="num">Amount to link</th></tr></thead><tbody id="pt-body"></tbody></table></div>
+      <div class="child-foot"><label class="show-inactive-label">${tt === 'INVOICE' ? '<input type="checkbox" id="pt-over"> allow overpayment (records excess on the invoice)' : ''}</label>
+        <span>Selected <b id="pt-sum">0.00</b> of <b>${money(t.unmatched_amount)}</b></span></div>
+      <div class="f-group"><label class="f-label">Remarks</label><input class="f-input" id="pt-rm"></div>`,
+      foot: `<button class="m-btn m-btn--cancel" data-x>Cancel</button><button class="m-btn m-btn--save" data-go><i class="ti ti-link"></i> Link selected</button>` });
+    maskDate($('#pt-d1', m.el)); maskDate($('#pt-d2', m.el));
+    const sum = () => { const s = $$('#pt-body tr', m.el).filter(tr => tr.querySelector('input[type=checkbox]').checked).reduce((a, tr) => a + (parseFloat(tr.querySelector('.amt').value) || 0), 0);
+      const el = $('#pt-sum', m.el); el.textContent = money(s); el.style.color = s > Number(t.unmatched_amount) + 0.001 ? '#B91C1C' : '#047857'; };
+    const find = async () => {
+      const ty = $('#pt-type', m.el).value;
+      const p = { date_from: $('#pt-d1', m.el).value, date_to: $('#pt-d2', m.el).value, q: $('#pt-q', m.el).value, kind: tt === 'REF' ? 'REFUND' : '' };
+      if (ty === 'BANK') Object.assign(p, { direction: lt === 'INTERNAL_TRANSFER' ? (cr ? 'DR' : 'CR') : lt === 'REVERSAL' ? (cr ? 'DR' : 'CR') : 'DR',
+        exclude_account: lt === 'INTERNAL_TRANSFER' ? t.bank_account_id : '', amount: lt === 'INTERNAL_TRANSFER' ? t.amount : '', q: '' });
+      try {
+        const rows = await get(`/api/recon/targets/${ty}`, p);
+        let left = Number(t.unmatched_amount);
+        $('#pt-body', m.el).innerHTML = rows.map(r => { const def = Math.min(left > 0 ? left : 0, Number(r.remaining)); return `<tr data-type="${r.type}" data-id="${r.id}"><td><input type="checkbox"></td><td>${ddmmyyyy(r.date)}</td><td>${esc(r.reference)}</td><td>${esc(r.vehicle || '')}</td>
+          <td class="num">${money(r.total)}</td><td class="num">${money(r.remaining)}</td><td><input class="f-input amt" style="text-align:right;width:110px" value="${Number(r.remaining).toFixed(2)}"></td></tr>`; }).join('')
+          || '<tr><td colspan=7><div class="tbl-empty">No open transactions in this range</div></td></tr>';
+        $$('#pt-body input', m.el).forEach(e => e.oninput = e.onchange = sum); sum();
+      } catch (e) { errToast(e); }
+    };
+    $('#pt-go', m.el).onclick = find; $('#pt-type', m.el).onchange = find;
+    $('#pt-all', m.el).onchange = e => { $$('#pt-body input[type=checkbox]', m.el).forEach(c => c.checked = e.target.checked); sum(); };
+    m.el.querySelector('[data-x]').onclick = m.close;
+    m.el.querySelector('[data-go]').onclick = async () => {
+      const targets = $$('#pt-body tr[data-id]', m.el).filter(tr => tr.querySelector('input[type=checkbox]').checked)
+        .map(tr => ({ type: tr.dataset.type, id: +tr.dataset.id, amount: tr.querySelector('.amt').value }));
+      if (!targets.length) return toast('Select at least one row', 'err');
+      m.close();
+      doLink(t, lt, targets, { remarks: $('#pt-rm', m.el).value, allow_overpayment: !!($('#pt-over', m.el) && $('#pt-over', m.el).checked) });
+    };
+    find();
+  }
+
+  $('#auto').onclick = async () => { try { const r = await post('/api/recon/auto-suggest', { bank_account_id: $('#acct').value || null }); toast(`${r.suggested} suggestion(s) created, ${r.auto_matched} auto-matched by explicit rules`); load(); } catch (e) { errToast(e); } };
+  maskDate($('#d1')); maskDate($('#d2'));
+  ['#acct', '#d1', '#d2'].forEach(s => $(s).onchange = () => { S.page = 1; load(); });
+  let tm; $('#q').oninput = () => { clearTimeout(tm); tm = setTimeout(() => { S.page = 1; load(); }, 300); };
+  options('bank_accounts').then(o => fillSelect($('#acct'), o, '', 'All accounts'));
+  renderTabs(); load();
+})();
+</script>
+{% endblock %}

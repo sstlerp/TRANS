@@ -1,0 +1,28 @@
+# Local/demo stack: MySQL 8 + ERP.  For production put a TLS reverse proxy (nginx) in front
+# and supply secrets via an .env file that is NOT committed.
+services:
+  db:
+    image: mysql:8.0
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci", "--default-time-zone=+05:30"]
+    environment:
+      MYSQL_DATABASE: trans_erp
+      MYSQL_USER: erp
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-erp_pass}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass}
+    volumes: [dbdata:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 5s
+      retries: 30
+  app:
+    build: .
+    depends_on:
+      db: {condition: service_healthy}
+    env_file: [.env]
+    environment:
+      ERP_DATABASE_URL: mysql+pymysql://erp:${MYSQL_PASSWORD:-erp_pass}@db:3306/trans_erp?charset=utf8mb4
+      ERP_STORAGE_DIR: /var/lib/trans-erp/storage
+      ERP_LOG_DIR: /var/log/trans-erp
+    ports: ["8000:8000"]
+    volumes: [storage:/var/lib/trans-erp/storage, logs:/var/log/trans-erp]
+volumes: {dbdata: {}, storage: {}, logs: {}}
