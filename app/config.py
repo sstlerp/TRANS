@@ -9,11 +9,33 @@ from __future__ import annotations
 
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import quote, unquote
 
+from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DEV_SECRET = "dev-only-change-me"
+
+
+def normalize_db_url(url: str) -> str:
+    """Percent-encode the user name and password inside a database URL.
+
+    Passwords often contain characters that have a meaning in URLs (@ : / # ? % ...), e.g.
+    ``mysql+pymysql://root:Pa@ss#1@127.0.0.1:3306/ERP_LOGISTICS``.  The host part starts after the
+    LAST "@", so the credentials can be recovered and encoded safely.  Already-encoded values are kept
+    as they are (decode → encode is idempotent).
+    """
+    url = (url or "").strip().strip('"').strip("'")
+    if "://" not in url:
+        return url
+    scheme, rest = url.split("://", 1)
+    if "@" not in rest:
+        return url
+    userinfo, hostpart = rest.rsplit("@", 1)
+    user, sep, password = userinfo.partition(":")
+    enc = lambda v: quote(unquote(v), safe="")  # noqa: E731
+    return f"{scheme}://{enc(user)}{sep}{enc(password) if sep else ''}@{hostpart}"
 
 
 class Settings(BaseSettings):
@@ -27,6 +49,11 @@ class Settings(BaseSettings):
     database_url: str = "mysql+pymysql://erp:erp_pass@127.0.0.1:3306/ERP_LOGISTICS?charset=utf8mb4"
     db_echo: bool = False
     db_pool_size: int = 10
+
+    @field_validator("database_url", mode="before")
+    @classmethod
+    def _encode_credentials(cls, v: str) -> str:
+        return normalize_db_url(v)
 
     secret_key: str = DEV_SECRET
     jwt_algorithm: str = "HS256"
