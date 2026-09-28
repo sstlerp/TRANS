@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Tyre Dashboard · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-steering-wheel" style="margin-right:.3rem"></i> Vehicle Tyre Dashboard</span></div>
+    <div class="vnd-tb-right"><a class="tb-btn tb-btn--ghost" href="/masters/tyres"><i class="ti ti-circle-dashed"></i> Tyre Master</a>
+      <a class="tb-btn tb-btn--ghost" href="/reports?r=tyre_cost"><i class="ti ti-chart-dots"></i> Tyre Reports</a></div>
+  </div>
+  <div class="vnd-body">
+    <div class="list-filters" style="border:1px solid var(--line);border-radius:8px;margin-bottom:.6rem">
+      <div class="f-group" style="min-width:260px;max-width:340px"><label class="f-label">Vehicle</label><select class="f-input" id="veh"><option value="">— Select vehicle —</option></select></div>
+      <div class="f-group" style="min-width:220px"><label class="f-label">Find tyre by serial</label><select class="f-input" id="tyre-find"><option value="">—</option></select></div>
+      <span id="veh-info" style="font-size:.72rem;color:#475569;margin-left:auto"></span>
+    </div>
+    <div class="dash-grid">
+      <div class="card c7"><div class="card-h"><i class="ti ti-layout-grid"></i> Positions (configured layout)</div><div class="card-b" id="axles">
+        <div class="tbl-empty"><i class="ti ti-truck"></i>Select a vehicle to see its tyre positions</div></div></div>
+      <div class="card c5"><div class="card-h"><i class="ti ti-timeline"></i> <span id="t-title">Tyre details &amp; history</span></div><div class="card-b" id="tyre">
+        <div class="tbl-empty"><i class="ti ti-hand-click"></i>Click a tyre to see its lifecycle timeline and cost per km</div></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/master.js"></script>
+<script>
+(() => {
+  const { $, $$, esc, get, money, num, ddmmyyyy, pill, options, fillSelect, errToast, toast } = ERP;
+  const P = new URLSearchParams(location.search);
+  let VEH = null;
+  async function loadVehicle(id) {
+    if (!id) return;
+    VEH = +id;
+    let d; try { d = await get(`/api/tyres/vehicle/${id}`); } catch (e) { return errToast(e); }
+    $('#veh-info').innerHTML = `Current odometer <b>${num(d.vehicle.current_odometer, 1)}</b> km · ${d.positions.filter(p => p.tyre).length}/${d.positions.length} positions fitted`;
+    if (!d.positions.length) { $('#axles').innerHTML = `<div class="note note-warn"><i class="ti ti-alert-triangle"></i><div>No tyre layout configured for this vehicle. Set a Tyre Layout on the vehicle (Fleet → Vehicles) or sub-category.</div></div>`; return; }
+    const rows = {}; d.positions.forEach(p => (rows[p.row] = rows[p.row] || []).push(p));
+    const maxCol = Math.max(...d.positions.map(p => p.col)), half = Math.ceil(maxCol / 2);
+    const gcol = c => c <= half ? c + 1 : c + 2;  // column 1 = label, a gap column separates left/right
+    const tmpl = `70px repeat(${half}, 108px) 90px repeat(${maxCol - half}, 108px)`;
+    $('#axles').innerHTML = `<div class="axle-wrap">${Object.keys(rows).sort((a, b) => a - b).map(r => {
+      const spare = rows[r].every(p => p.spare);
+      return `<div class="axle ${spare ? 'spare' : ''}" style="display:grid;grid-template-columns:${tmpl};gap:.4rem"><span class="axle-lbl">${r == 9 ? 'Spare' : r == 99 ? 'Other' : 'Axle ' + r}</span>
+        ${rows[r].map(p => `<div style="grid-column:${spare && rows[r].length === 1 ? half + 2 : gcol(p.col)};grid-row:1">${box(p)}</div>`).join('')}</div>`;
+    }).join('')}</div>
+    <div style="font-size:.64rem;color:#64748B;margin-top:.4rem"><span class="pill pill-red">red border</span> tread at/below threshold · click an empty position to install a tyre</div>`;
+    $$('.tyre-box').forEach(b => b.onclick = () => b.dataset.tyre ? showTyre(+b.dataset.tyre) : install(+b.dataset.pos));
+  }
+  function box(p) {
+    const t = p.tyre;
+    if (!t) return `<div class="tyre-box empty" data-pos="${p.position_id}"><div class="pos">${esc(p.code)}</div><i class="ti ti-circle-plus" style="font-size:1.2rem"></i>Empty<br>install</div>`;
+    return `<div class="tyre-box ${t.low_tread ? 'low' : ''}" data-tyre="${t.tyre_id}" title="${esc(p.name)}"><div class="pos">${esc(p.code)}</div><div class="sr">${esc(t.serial)}</div>
+      <div>${esc(t.brand)} ${esc(t.size)}</div>
+      <div class="kv"><span>Tread</span><b>${t.tread_depth ?? '—'} mm</b></div><div class="kv"><span>Fitted</span><b>${ddmmyyyy(t.installed_at)}</b></div>
+      <div class="kv"><span>@ odo</span><b>${num(t.install_odometer, 0)}</b></div><div class="kv"><span>Now</span><b>${num(t.current_odometer, 0)}</b></div>
+      <div class="kv"><span>Run</span><b>${num(t.running_km, 0)} km</b></div><div class="kv"><span>Status</span><b>${esc(String(t.status).replace(/_/g, ' '))}</b></div></div>`;
+  }
+  async function install(posId) {
+    const stock = await options('tyres', { current_status: 'NEW,IN_STOCK,REMOVED,IN_GODOWN,RETREADED,UNDER_INSPECTION' });
+    if (!stock.length) return toast('No tyres in stock. Add tyres in Tyre Master.', 'warn');
+    const m = ERP.modal({ title: 'Choose tyre to install', icon: 'ti-circle-plus', body: `<div class="f-group"><label class="f-label">Tyre in stock</label><select class="f-input" id="pick"></select></div>`,
+      foot: `<button class="m-btn m-btn--cancel" data-x>Cancel</button><button class="m-btn m-btn--save" data-go>Continue</button>` });
+    fillSelect($('#pick', m.el), stock, stock[0].id);
+    m.el.querySelector('[data-x]').onclick = m.close;
+    m.el.querySelector('[data-go]').onclick = () => { const id = $('#pick', m.el).value; if (!id) return; m.close();
+      Master.runAction('tyres', +id, 'install', { vehicle_id: VEH, position_id: posId }, () => { loadVehicle(VEH); showTyre(+id); }); };
+  }
+  async function showTyre(id) {
+    let d; try { d = await get(`/api/tyres/${id}/timeline`); } catch (e) { return errToast(e); }
+    const t = d.tyre, c = d.cost;
+    $('#t-title').innerHTML = `${esc(t.serial_number)} ${pill(t.current_status)}`;
+    const acts = [['shift', 'ti-arrows-exchange', 'Shift'], ['transfer', 'ti-truck-loading', 'Transfer'], ['remove', 'ti-circle-minus', 'Remove'], ['inspect', 'ti-zoom-check', 'Inspect'],
+      ['maintain', 'ti-tool', 'Maintenance'], ['send_retread', 'ti-recycle', 'Retread'], ['receive_retread', 'ti-package-import', 'Receive retread'], ['warranty', 'ti-shield', 'Warranty'],
+      ['install', 'ti-circle-plus', 'Install'], ['scrap', 'ti-trash-x', 'Scrap']];
+    $('#tyre').innerHTML = `
+      <div style="font-size:.74rem"><b>${esc(t.brand)} ${esc(t.model || '')}</b> · ${esc(t.size)} · ${esc(t.pattern || '')} · retreads <b>${t.retread_count}</b><br>
+      ${t.current_vehicle ? `On <b>${esc(t.current_vehicle)}</b> at <b>${esc(t.current_position)}</b>` : t.current_location ? `At <b>${esc(t.current_location)}</b>` : ''}</div>
+      <div class="amt-strip"><div><div class="l">Net cost</div><div class="v">₹ ${money(c.net_cost)}</div></div><div><div class="l">KM run</div><div class="v">${num(c.km, 0)}</div></div>
+        <div><div class="l">Cost / km</div><div class="v">${c.cost_per_km !== null ? '₹ ' + Number(c.cost_per_km).toFixed(3) : '—'}</div></div><div><div class="l">Tread</div><div class="v">${t.current_tread_depth ?? '—'} mm</div></div></div>
+      <div style="font-size:.62rem;color:#64748B;margin-bottom:.4rem">Purchase ₹${money(c.purchase)} + retreading ₹${money(c.retreading)} + repairs ₹${money(c.repairs)} − warranty ₹${money(c.warranty_credit)} − scrap ₹${money(c.scrap_value)} (configurable in business rules)</div>
+      <div class="row-actions" id="t-acts">${acts.map(a => `<button class="ra-btn ra-edit" data-a="${a[0]}"><i class="ti ${a[1]}"></i> ${a[2]}</button>`).join('')}
+        <a class="ra-btn ra-edit" href="/masters/tyres?id=${t.id}"><i class="ti ti-external-link"></i> Open</a></div>
+      <div class="card-h" style="background:none;padding:.4rem 0"><i class="ti ti-timeline"></i> Lifecycle timeline (authoritative movement history)</div>
+      <ul class="timeline">${d.timeline.map(m => `<li><span class="t">${esc(m.label)}</span> <span class="d">${ERP.dt(m.movement_date)}</span>${m.is_override ? ' <span class="pill pill-violet">override</span>' : ''}<br>
+        <span style="font-size:.66rem">${[m.from_vehicle && `from ${esc(m.from_vehicle)}${m.from_position ? ' / ' + esc(m.from_position) : ''}`, m.to_vehicle && `to ${esc(m.to_vehicle)}${m.to_position ? ' / ' + esc(m.to_position) : ''}`,
+          m.from_location && `from ${esc(m.from_location)}`, m.to_location && `to ${esc(m.to_location)}`, m.odometer && `odo ${num(m.odometer, 0)}`, m.to_odometer && m.to_odometer !== m.odometer && `→ ${num(m.to_odometer, 0)}`,
+          m.running_km && `ran ${num(m.running_km, 0)} km`, m.tread_depth && `tread ${m.tread_depth} mm`, m.reason && esc(m.reason)].filter(Boolean).join(' · ')}</span>
+        <div style="font-size:.6rem;color:#94A3B8">${esc(m.status_before || '')} → ${esc(m.status_after || '')}</div></li>`).join('')}</ul>`;
+    $$('#t-acts [data-a]').forEach(b => b.onclick = () => Master.runAction('tyres', t.id, b.dataset.a,
+      b.dataset.a === 'transfer' || b.dataset.a === 'install' ? {} : {}, () => { if (VEH) loadVehicle(VEH); showTyre(t.id); }));
+  }
+  $('#veh').onchange = e => loadVehicle(e.target.value);
+  $('#tyre-find').onchange = e => e.target.value && showTyre(+e.target.value);
+  options('vehicles').then(o => { fillSelect($('#veh'), o, P.get('vehicle') || '', '— Select vehicle —'); if (P.get('vehicle')) loadVehicle(P.get('vehicle')); });
+  options('tyres').then(o => fillSelect($('#tyre-find'), o, '', '—'));
+  if (P.get('tyre')) showTyre(+P.get('tyre'));
+})();
+</script>
+{% endblock %}

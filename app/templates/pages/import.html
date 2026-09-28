@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+{% block title %}Statement Import · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-file-import" style="margin-right:.3rem"></i> Statement Import</span></div>
+    <div class="vnd-tb-right">
+      <a class="tb-btn tb-btn--ghost" href="/masters/import_templates"><i class="ti ti-template"></i> Template Builder</a>
+      <a class="tb-btn tb-btn--ghost" href="/masters/import_batches"><i class="ti ti-files"></i> Import History</a>
+      <button class="tb-btn tb-btn--new" id="restart"><i class="ti ti-refresh"></i> New Import</button>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="steps" id="steps">
+      <div class="step" data-s="1"><span class="n">1</span> Provider &amp; type</div>
+      <div class="step" data-s="2"><span class="n">2</span> Template &amp; mapping</div>
+      <div class="step" data-s="3"><span class="n">3</span> Upload &amp; sheet</div>
+      <div class="step" data-s="4"><span class="n">4</span> Preview &amp; validation</div>
+      <div class="step" data-s="5"><span class="n">5</span> Confirm &amp; result</div>
+    </div>
+
+    <div id="sel-wrap" class="vnd-form-wrap">
+      <div class="vfw-cols">
+        <div class="vfw-col"><div class="vnd-section"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-plug"></i> 1. Provider &amp; Statement Type</span></div>
+          <div class="vnd-section-body"><div class="fg2">
+            <div class="f-group"><label class="f-label">Statement type <span class="req">*</span></label><select class="f-input" id="stype">
+              <option value="">— Select —</option><option>BANK</option><option>TOLL</option><option>FASTAG</option><option>FUEL</option><option>FUEL_CARD</option>
+              <option>MAINTENANCE</option><option>INSURANCE</option><option>GPS</option><option>TELEMATICS</option></select></div>
+            <div class="f-group"><label class="f-label">Provider <span class="req">*</span></label><select class="f-input" id="provider"><option value="">— Select —</option></select></div>
+          </div></div></div></div>
+        <div class="vfw-col"><div class="vnd-section"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-template"></i> 2. Import Template</span></div>
+          <div class="vnd-section-body"><div class="fg2">
+            <div class="f-group full"><label class="f-label">Template (version) <span class="req">*</span></label><select class="f-input" id="template"><option value="">— Select provider first —</option></select></div>
+            <div class="f-group full" id="bank-acct-wrap" style="display:none"><label class="f-label">Bank account <span class="req">*</span></label><select class="f-input" id="bank_account"></select></div>
+          </div></div></div></div>
+        <div class="vfw-col"><div class="vnd-section"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-upload"></i> 3. Upload Excel / CSV</span></div>
+          <div class="vnd-section-body">
+            <label class="drop" id="drop"><input type="file" id="file" accept=".xlsx,.csv" style="display:none"><i class="ti ti-cloud-upload" style="font-size:1.4rem"></i><br><span id="file-name">Drop the statement here or click to browse (.xlsx / .csv)</span></label>
+            <div class="f-group" id="sheet-wrap" style="display:none;margin-top:.35rem"><label class="f-label">Sheet</label><select class="f-input" id="sheet"></select></div>
+            <button class="m-btn m-btn--ok" id="btn-preview" style="margin-top:.45rem;width:100%;justify-content:center" disabled><i class="ti ti-eye"></i> Parse &amp; Preview</button>
+          </div></div></div>
+      </div>
+      <div class="vnd-section" id="map-sec" style="display:none"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-arrows-right-left"></i> Column mapping &amp; transformation rules (from template)</span></div>
+        <div class="vnd-section-body" id="map-body"></div></div>
+    </div>
+
+    <div id="preview" style="display:none">
+      <div class="vnd-section" style="margin-bottom:.5rem"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-report-analytics"></i> Batch <span id="b-id"></span></span><span id="b-status"></span></div>
+        <div class="vnd-section-body"><div class="kpis" id="b-kpis"></div><div id="b-notes"></div>
+          <div style="display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem" id="b-actions"></div></div></div>
+      <div class="vnd-list-wrap">
+        <div class="vnd-list-head"><div class="party-tabs" id="row-tabs" style="margin:0;border:none"></div>
+          <span class="vnd-list-title">Preview rows</span>
+          <div class="vnd-list-head-right"><label class="show-inactive-label"><input type="checkbox" id="show-raw"> show original values</label><span class="list-count" id="rows-count"></span></div></div>
+        <div class="vnd-table-scroll"><table class="vnd-table"><thead id="rows-head"></thead><tbody id="rows-body"></tbody></table></div>
+        <div class="pager"><span id="rows-info"></span><div class="pg-btns"><button class="ra-btn ra-edit" id="rp-prev"><i class="ti ti-chevron-left"></i></button><span id="rp-no"></span><button class="ra-btn ra-edit" id="rp-next"><i class="ti ti-chevron-right"></i></button></div></div>
+      </div>
+      <div class="vnd-list-wrap"><div class="vnd-list-head"><span class="sh-title" style="font:700 .62rem 'Sora',system-ui,sans-serif;color:#0369A1;text-transform:uppercase;letter-spacing:.1em"><i class="ti ti-alert-triangle"></i> Errors &amp; warnings (row · column · field · original value · error · suggestion)</span></div>
+        <div class="vnd-table-scroll" style="max-height:320px"><table class="vnd-table"><thead><tr><th>Row</th><th>Col</th><th>Field</th><th>Original value</th><th>Type</th><th>Severity</th><th>Message</th><th>Suggested correction</th></tr></thead><tbody id="err-body"></tbody></table></div></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const { $, $$, esc, get, api, post, toast, errToast, money, ddmmyyyy, pill, options, fillSelect, confirmBox } = ERP;
+  const P = new URLSearchParams(location.search);
+  const S = { batch: null, tab: '', page: 1, templates: [], fam: '' };
+  const FAM = { FUEL_CARD: 'FUEL', FASTAG: 'TOLL', TELEMATICS: 'GPS' };
+  const PROV_TYPE = { BANK: 'BANK', TOLL: 'TOLL', FASTAG: 'TOLL', FUEL: 'FUEL', FUEL_CARD: 'FUEL', MAINTENANCE: 'MAINTENANCE', INSURANCE: 'INSURANCE', GPS: 'GPS', TELEMATICS: 'TELEMATICS' };
+  const step = n => $$('.step').forEach(s => { const k = +s.dataset.s; s.classList.toggle('active', k === n); s.classList.toggle('done', k < n); });
+
+  async function loadProviders() {
+    const t = $('#stype').value;
+    S.fam = FAM[t] || t;
+    fillSelect($('#provider'), t ? await options('providers', { provider_type: PROV_TYPE[t] }) : [], '');
+    $('#bank-acct-wrap').style.display = S.fam === 'BANK' ? '' : 'none';
+    if (S.fam === 'BANK') fillSelect($('#bank_account'), await options('bank_accounts'), '');
+    $('#template').innerHTML = '<option value="">— Select provider —</option>'; $('#map-sec').style.display = 'none';
+    step(t ? 1 : 1); check();
+  }
+  async function loadTemplates() {
+    const pid = $('#provider').value;
+    if (!pid) return;
+    S.templates = await get('/api/imports/templates', { provider_id: pid, statement_type: $('#stype').value });
+    fillSelect($('#template'), S.templates.map(t => ({ id: t.id, label: `${t.template_name} — v${t.version}${t.effective_from ? ' (from ' + ddmmyyyy(t.effective_from) + ')' : ''}` })), S.templates.length === 1 ? S.templates[0].id : '',
+      S.templates.length ? '— Select template —' : '— No template: create one in Template Builder —');
+    showMapping(); step(2);
+  }
+  function showMapping() {
+    const t = S.templates.find(x => x.id === +$('#template').value);
+    if (!t) { $('#map-sec').style.display = 'none'; return check(); }
+    $('#map-sec').style.display = '';
+    $('#map-body').innerHTML = `<div class="note note-info"><i class="ti ti-info-circle"></i><div>Sheet <b>${esc(t.sheet_name || 'first sheet')}</b> · header row <b>${t.header_row}</b> · data from row <b>${t.data_start_row}</b> · date format <span class="code">${esc(t.date_format || t.datetime_format || 'auto (DD/MM/YYYY first)')}</span> · amounts <b>${esc(t.amount_mode)}</b>. To change the layout, edit the template (a new version keeps history).</div></div>
+      <table class="vnd-table map-tbl"><thead><tr><th>Source column</th><th>Expected header</th><th>→ Target field</th><th>Type</th><th>Req.</th><th>Transformation</th><th>Lookup</th><th>Default</th><th>Validation</th></tr></thead><tbody>
+      ${t.columns.map(c => `<tr><td><b>${esc(c.source_column || '')}</b></td><td>${esc(c.source_header || '')}</td><td><span class="code">${esc(c.target_field)}</span></td><td>${esc(c.data_type)}</td><td>${c.is_required ? '✓' : ''}</td>
+        <td><span class="code">${esc(c.transformation || '')}</span></td><td>${esc(c.lookup_rule || '')}</td><td>${esc(c.default_value || '')}</td><td>${esc(c.validation_rule || '')}</td></tr>`).join('')}</tbody></table>`;
+    check();
+  }
+  function check() {
+    const ok = $('#template').value && $('#file').files.length && (S.fam !== 'BANK' || $('#bank_account').value);
+    $('#btn-preview').disabled = !ok;
+    if ($('#template').value) step($('#file').files.length ? 3 : 2);
+  }
+  async function onFile() {
+    const f = $('#file').files[0];
+    $('#file-name').textContent = f ? `${f.name} (${(f.size / 1024).toFixed(1)} KB)` : 'Drop the statement here or click to browse';
+    $('#sheet-wrap').style.display = 'none';
+    if (f && f.name.toLowerCase().endsWith('.xlsx')) {
+      const fd = new FormData(); fd.append('file', f);
+      try {
+        const r = await api('/api/imports/sheets', { method: 'POST', body: fd });
+        const t = S.templates.find(x => x.id === +$('#template').value);
+        fillSelect($('#sheet'), r.sheets.map(s => ({ id: s, label: s })), t && t.sheet_name && r.sheets.includes(t.sheet_name) ? t.sheet_name : r.sheets[0], null);
+        $('#sheet-wrap').style.display = r.sheets.length > 1 ? '' : 'none';
+      } catch (e) { errToast(e); }
+    }
+    check();
+  }
+  async function preview() {
+    const fd = new FormData();
+    fd.append('template_id', $('#template').value); fd.append('file', $('#file').files[0]);
+    if ($('#sheet-wrap').style.display !== 'none') fd.append('sheet', $('#sheet').value);
+    if (S.fam === 'BANK') fd.append('bank_account_id', $('#bank_account').value);
+    $('#btn-preview').disabled = true; $('#btn-preview').innerHTML = '<i class="ti ti-loader-2"></i> Parsing…';
+    try { const r = await api('/api/imports/preview', { method: 'POST', body: fd }); history.replaceState(null, '', '/imports/batches/' + r.batch.id); showBatch(r); }
+    catch (e) { errToast(e); check(); }
+    finally { $('#btn-preview').innerHTML = '<i class="ti ti-eye"></i> Parse & Preview'; }
+  }
+  async function showBatch(r) {
+    S.batch = r.batch; S.fam = FAM[r.batch.statement_type] || r.batch.statement_type;
+    const b = r.batch, sc = r.status_counts || {};
+    $('#sel-wrap').style.display = 'none'; $('#preview').style.display = '';
+    step(['PREVIEWED'].includes(b.status) ? 4 : 5);
+    $('#b-id').textContent = `#${b.id} — ${b.file_name} ${b.sheet_name ? '· ' + b.sheet_name : ''} (${b.statement_type}, ${b.provider_id__label || ''})`;
+    $('#b-status').innerHTML = pill(b.status);
+    const k = (l, v, c = '') => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v ?? 0}</div></div>`;
+    $('#b-kpis').innerHTML = k('Rows read', b.total_rows, 'blue') + k('Valid', sc.VALID, 'green') + k('Warnings', sc.WARNING, sc.WARNING ? 'amber' : '') +
+      k('Duplicates (flagged)', sc.DUPLICATE, sc.DUPLICATE ? 'amber' : '') + k('Errors', sc.ERROR, sc.ERROR ? 'red' : 'green') + k('Skipped', sc.SKIPPED) +
+      k('Imported', sc.IMPORTED, sc.IMPORTED ? 'green' : '') + k('Unmatched / review', b.unmatched_rows, b.unmatched_rows ? 'amber' : '');
+    let notes = '';
+    if (r.header_errors.length) notes += `<div class="note note-err"><i class="ti ti-columns-off"></i><div><b>Header validation failed — import blocked.</b><br>${r.header_errors.map(h => esc(h.message)).join('<br>')}</div></div>`;
+    if (b.status === 'PREVIEWED' && !r.header_errors.some(h => h.severity === 'ERROR'))
+      notes += `<div class="note note-info"><i class="ti ti-info-circle"></i><div>Nothing has been saved yet. <b>Valid</b> and <b>warning</b> rows will be imported; <b>duplicates</b> and <b>errors</b> will not. Unmatched vehicles / plazas are imported with an UNMATCHED status for review — never guessed.</div></div>`;
+    if (b.status === 'QUEUED' || b.status === 'PROCESSING') notes += `<div class="note note-warn"><i class="ti ti-loader-2"></i><div>Large file: importing in the background — processed ${b.processed_rows || 0} of ${b.total_rows} rows. This page refreshes automatically.</div></div>`;
+    if (b.status === 'FAILED') notes += `<div class="note note-err"><i class="ti ti-alert-circle"></i><div>Import failed and was rolled back. Nothing was saved.</div></div>`;
+    if (['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(b.status)) notes += `<div class="note note-ok"><i class="ti ti-circle-check"></i><div>Imported ${sc.IMPORTED || 0} row(s) on ${ddmmyyyy(b.imported_at)}. Review unmatched items using the buttons below.</div></div>`;
+    $('#b-notes').innerHTML = notes;
+    const acts = [];
+    if (b.status === 'PREVIEWED' && !r.header_errors.some(h => h.severity === 'ERROR')) {
+      acts.push(`<button class="tb-btn tb-btn--green" id="go-commit"><i class="ti ti-database-import"></i> Confirm import of ${(sc.VALID || 0) + (sc.WARNING || 0)} row(s)</button>`);
+      acts.push(`<button class="tb-btn tb-btn--light" id="go-cancel"><i class="ti ti-x"></i> Discard batch</button>`);
+    }
+    if (['COMPLETED', 'COMPLETED_WITH_ERRORS'].includes(b.status)) {
+      const rv = { BANK: [['/finance/reconciliation?batch=' + b.id, 'ti-arrows-join-2', 'Reconcile imported bank rows']],
+        TOLL: [['/masters/toll_transactions?f_import_batch_id=' + b.id + '&f_status=VEHICLE_UNMATCHED,PLAZA_UNMATCHED,VEHICLE_MATCHED', 'ti-alert-circle', 'Review unmatched toll rows'], ['/masters/toll_transactions?f_import_batch_id=' + b.id, 'ti-list', 'All rows of this batch']],
+        FUEL: [['/masters/fuel_transactions?f_import_batch_id=' + b.id + '&f_status=VEHICLE_UNMATCHED,FLAGGED', 'ti-alert-circle', 'Review unmatched / flagged fuel'], ['/masters/fuel_transactions?f_import_batch_id=' + b.id, 'ti-list', 'All rows of this batch']],
+        MAINTENANCE: [['/masters/job_cards', 'ti-tools', 'Job cards']], INSURANCE: [['/masters/insurance_policies', 'ti-shield', 'Policies']], GPS: [['/masters/odometer_readings', 'ti-gauge', 'Odometer readings']] }[S.fam] || [];
+      rv.forEach(([u, i, l]) => acts.push(`<a class="tb-btn tb-btn--sky" href="${u}"><i class="ti ${i}"></i> ${l}</a>`));
+      acts.push(`<a class="tb-btn tb-btn--light" href="/masters/import_errors?f_batch_id=${b.id}"><i class="ti ti-alert-triangle"></i> Error register</a>`);
+    }
+    $('#b-actions').innerHTML = acts.join('');
+    if ($('#go-commit')) $('#go-commit').onclick = commit;
+    if ($('#go-cancel')) $('#go-cancel').onclick = async () => { if (await confirmBox('Discard this previewed batch?')) { await post(`/api/imports/batches/${b.id}/cancel`); location.href = '/imports'; } };
+    const tabs = [['', 'All', b.total_rows], ['VALID', 'Valid', sc.VALID], ['WARNING', 'Warnings', sc.WARNING], ['DUPLICATE', 'Duplicates', sc.DUPLICATE], ['ERROR', 'Errors', sc.ERROR], ['SKIPPED', 'Skipped', sc.SKIPPED], ['IMPORTED', 'Imported', sc.IMPORTED]];
+    $('#row-tabs').innerHTML = tabs.filter(t => t[0] === '' || t[2]).map(t => `<span class="party-tab ${S.tab === t[0] ? 'party-tab--active' : ''}" data-t="${t[0]}">${t[1]} <span class="cnt">${t[2] || 0}</span></span>`).join('');
+    $$('#row-tabs .party-tab').forEach(x => x.onclick = () => { S.tab = x.dataset.t; S.page = 1; showBatch(r); });
+    loadRows(); loadErrors();
+    if (['QUEUED', 'PROCESSING'].includes(b.status)) setTimeout(async () => showBatch(await get(`/api/imports/batches/${b.id}`)), 2500);
+  }
+  async function loadRows() {
+    const d = await get(`/api/imports/batches/${S.batch.id}/rows`, { status: S.tab, page: S.page, size: 50 });
+    const raw = $('#show-raw').checked;
+    const keys = [...new Set(d.items.flatMap(r => Object.keys((raw ? r.raw : r.values) || {})))].filter(k => !k.endsWith('__id') || !raw).slice(0, 18);
+    $('#rows-head').innerHTML = `<tr><th>Row</th><th>Status</th>${keys.map(k => `<th>${esc(k.replace('__id', ' → ID'))}</th>`).join('')}<th>Messages</th></tr>`;
+    $('#rows-body').innerHTML = d.items.map(r => { const v = (raw ? r.raw : r.values) || {};
+      return `<tr><td>${r.source_row}</td><td>${pill(r.status)}</td>${keys.map(k => `<td>${fmt(k, v[k])}</td>`).join('')}<td style="font-size:.66rem;color:#92400E;max-width:340px">${esc(r.messages || '')}</td></tr>`; }).join('')
+      || '<tr><td colspan=99><div class="tbl-empty">No rows</div></td></tr>';
+    const pages = Math.max(1, Math.ceil(d.total / d.size));
+    $('#rows-count').textContent = `${d.total} row(s)`; $('#rp-no').textContent = `Page ${d.page} / ${pages}`;
+    $('#rows-info').textContent = `Rows ${(d.page - 1) * d.size + 1}–${Math.min(d.page * d.size, d.total)} of ${d.total}`;
+    $('#rp-prev').onclick = () => { if (S.page > 1) { S.page--; loadRows(); } };
+    $('#rp-next').onclick = () => { if (S.page < pages) { S.page++; loadRows(); } };
+  }
+  function fmt(k, v) {
+    if (v === null || v === undefined) return '<span style="color:#CBD5E1">—</span>';
+    if (/date/.test(k) && typeof v === 'string' && /^\d{4}-/.test(v)) return ddmmyyyy(v) + (v.length > 10 ? ' ' + v.slice(11, 16) : '');
+    if (k.endsWith('__id')) return v ? `<span class="pill pill-green">#${v}</span>` : '<span class="pill pill-red">unmatched</span>';
+    return esc(v);
+  }
+  async function loadErrors() {
+    const e = await get(`/api/imports/batches/${S.batch.id}/errors`);
+    $('#err-body').innerHTML = e.map(x => `<tr><td>${x.source_row ?? ''}</td><td>${esc(x.source_column || '')}</td><td>${esc(x.target_field || '')}</td><td>${esc(x.original_value || '')}</td>
+      <td>${esc(x.error_type)}</td><td>${pill(x.severity)}</td><td>${esc(x.error_message)}</td><td style="color:#047857">${esc(x.suggested_correction || '')}</td></tr>`).join('')
+      || '<tr><td colspan=8><div class="tbl-empty"><i class="ti ti-circle-check" style="color:#16A34A;opacity:1"></i>No errors or warnings</div></td></tr>';
+  }
+  async function commit() {
+    if (!await confirmBox('Import the valid rows now? This is recorded in the audit log.', { okText: 'Import' })) return;
+    $('#go-commit').disabled = true; $('#go-commit').innerHTML = '<i class="ti ti-loader-2"></i> Importing…';
+    try {
+      const r = await post(`/api/imports/batches/${S.batch.id}/commit`, { auto_suggest: true });
+      if (r.queued) { toast('Large file queued for background import'); showBatch(await get(`/api/imports/batches/${S.batch.id}`)); }
+      else { toast('Import complete'); S.tab = ''; showBatch(r); }
+    } catch (e) { errToast(e); showBatch(await get(`/api/imports/batches/${S.batch.id}`)); }
+  }
+  $('#stype').onchange = loadProviders; $('#provider').onchange = loadTemplates; $('#template').onchange = showMapping;
+  $('#bank_account').onchange = check; $('#file').onchange = onFile; $('#btn-preview').onclick = preview; $('#sheet').onchange = check;
+  $('#show-raw').onchange = loadRows; $('#restart').onclick = () => location.href = '/imports';
+  const drop = $('#drop');
+  ['dragenter', 'dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('drag'); }));
+  ['dragleave', 'drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('drag'); }));
+  drop.addEventListener('drop', e => { $('#file').files = e.dataTransfer.files; onFile(); });
+  step(1);
+  const bid = {{ (batch_id if batch_id is defined else none)|tojson }};
+  if (bid) get(`/api/imports/batches/${bid}`).then(showBatch).catch(errToast);
+  else if (P.get('type')) { $('#stype').value = P.get('type'); loadProviders(); }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Reports · {{ brand_company_name }}{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <div class="vnd-tb-left"><span class="vnd-toolbar-title"><i class="ti ti-report-analytics" style="margin-right:.3rem"></i> <span id="r-title">Report Centre</span></span></div>
+    <div class="vnd-tb-right">
+      <button class="tb-btn tb-btn--ghost" data-x="xlsx"><i class="ti ti-file-spreadsheet"></i> Excel</button>
+      <button class="tb-btn tb-btn--ghost" data-x="csv"><i class="ti ti-file-text"></i> CSV</button>
+      <button class="tb-btn tb-btn--ghost" data-x="pdf"><i class="ti ti-file-type-pdf"></i> PDF</button>
+      <button class="tb-btn tb-btn--ghost" onclick="window.print()"><i class="ti ti-printer"></i> Print</button>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="dash-grid">
+      <div class="card c3 no-print"><div class="card-h"><i class="ti ti-list"></i> Reports</div><div class="card-b" id="rlist" style="padding:.3rem .5rem"></div></div>
+      <div class="c9" style="grid-column:span 9;min-width:0">
+        <div class="vnd-section" style="margin-bottom:.5rem"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-filter"></i> Filters</span></div>
+          <div class="vnd-section-body"><div class="fg4" id="params"></div>
+            <button class="m-btn m-btn--ok" id="run" style="margin-top:.35rem"><i class="ti ti-player-play"></i> Run report</button></div></div>
+        <div class="note note-info" id="r-note" style="display:none"></div>
+        <div class="vnd-list-wrap"><div class="vnd-table-scroll" style="max-height:calc(100vh - 330px)"><table class="vnd-table"><thead id="rh"></thead><tbody id="rb">
+          <tr><td><div class="tbl-empty"><i class="ti ti-report"></i>Choose a report and click Run</div></td></tr></tbody></table></div>
+          <div class="pager"><span id="rcount"></span><span>Dates shown as DD/MM/YYYY</span></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block head %}<style>@media(max-width:1100px){.c9{grid-column:span 12 !important}}</style>{% endblock %}
+{% block scripts %}
+<script>
+(() => {
+  const { $, $$, esc, get, money, ddmmyyyy, options, fillSelect, maskDate, errToast, lookups, clean } = ERP;
+  const P = new URLSearchParams(location.search);
+  let REPORTS = [], cur = null;
+  const PARAM = {
+    date_from: ['From', 'date'], date_to: ['To', 'date'], branch_id: ['Branch', 'fk', 'branches'], cost_category_id: ['Category', 'fk', 'cost_categories'],
+    sub_category_id: ['Sub-category', 'fk', 'sub_categories'], vehicle_id: ['Vehicle', 'fk', 'vehicles'], customer_id: ['Customer', 'fk', 'customers'],
+    provider_id: ['Provider', 'fk', 'providers'], bank_account_id: ['Bank account', 'fk', 'bank_accounts'],
+    cc_type: ['Cost center type', 'sel', ['VEHICLE', 'NON_VEHICLE', 'COMMON', 'CONTRACT', 'OTHER']],
+    category: ['Renewal category', 'lk', 'RENEWAL_CATEGORY'], status: ['Status (comma list)', 'txt'], brand: ['Brand', 'txt'], size: ['Size', 'txt'],
+    movement_type: ['Movement type', 'sel', ['PURCHASE', 'INSTALL', 'SHIFT', 'TRANSFER', 'REMOVE', 'MOVE_LOCATION', 'SEND_RETREAD', 'RECEIVE_RETREAD', 'SEND_WARRANTY', 'WARRANTY_RESOLVED', 'SCRAP', 'SELL', 'LOST', 'CORRECTION']],
+    entity_type: ['Entity', 'txt'], action: ['Action', 'txt'] };
+  const NOTES = {
+    profitability: 'Operating cost comes from operational records (fuel, toll, maintenance, tyres, insurance, tax/permit/PESO, expenses) plus bank debits allocated directly to cost centers. Bank payments linked to operational records are settlements and are not counted twice. Refunds/cashbacks reduce cost or add other income per business rules. Items without a cost center appear as UNALLOCATED.',
+    category_costs: 'Each transaction is attributed to the category/sub-category that applied to the vehicle on the transaction date (effective-dated classification history).',
+    tyre_cost: 'Cost/km = (purchase + retreading + repairs − warranty credits − scrap value) ÷ km run. GST, warranty and scrap treatment are configurable business rules.' };
+  async function init() {
+    REPORTS = await get('/api/reports');
+    const groups = {}; REPORTS.forEach(r => (groups[r.group] = groups[r.group] || []).push(r));
+    $('#rlist').innerHTML = Object.entries(groups).map(([g, rs]) => `<div style="font:700 .58rem 'Sora',system-ui,sans-serif;color:#0369A1;text-transform:uppercase;letter-spacing:.1em;margin:.45rem 0 .15rem">${esc(g)}</div>` +
+      rs.map(r => `<a href="?r=${r.key}" data-k="${r.key}" style="display:block;padding:.22rem .4rem;border-radius:5px;font-size:.72rem;text-decoration:none;color:#0F172A">${esc(r.title)}</a>`).join('')).join('');
+    $$('#rlist a').forEach(a => a.onclick = ev => { ev.preventDefault(); history.replaceState(null, '', '?r=' + a.dataset.k); pick(a.dataset.k); });
+    pick(P.get('r') || 'profitability');
+  }
+  async function pick(k) {
+    cur = REPORTS.find(r => r.key === k); if (!cur) return;
+    $$('#rlist a').forEach(a => a.style.background = a.dataset.k === k ? '#E0F2FE' : '');
+    $('#r-title').textContent = cur.title;
+    $('#r-note').style.display = NOTES[k] ? '' : 'none'; $('#r-note').innerHTML = NOTES[k] ? `<i class="ti ti-info-circle"></i><div>${esc(NOTES[k])}</div>` : '';
+    $('#params').innerHTML = cur.params.map(p => { const d = PARAM[p] || [p, 'txt'];
+      return `<div class="f-group"><label class="f-label">${esc(d[0])}</label>${d[1] === 'txt' || d[1] === 'date' ? `<input class="f-input" data-p="${p}" ${d[1] === 'date' ? 'placeholder="DD/MM/YYYY"' : ''}>` : `<select class="f-input" data-p="${p}"><option value="">All</option></select>`}</div>`; }).join('')
+      || '<div style="font-size:.7rem;color:#64748B">No filters</div>';
+    for (const p of cur.params) {
+      const d = PARAM[p] || [p, 'txt'], el = $(`[data-p="${p}"]`);
+      if (d[1] === 'date') { maskDate(el); el.value = P.get(p) || (p === 'date_from' ? ERP.monthStartStr() : ERP.todayStr()); }
+      if (d[1] === 'fk') fillSelect(el, await options(d[2]), P.get(p) || '', 'All');
+      if (d[1] === 'sel') fillSelect(el, d[2].map(x => ({ id: x, label: x.replace(/_/g, ' ') })), '', 'All');
+      if (d[1] === 'lk') fillSelect(el, (await lookups(d[2])).map(x => ({ id: x.code, label: x.label })), '', 'All');
+    }
+    run();
+  }
+  const params = () => clean(Object.fromEntries($$('[data-p]').map(e => [e.dataset.p, e.value])));
+  async function run() {
+    $('#rb').innerHTML = '<tr><td><div class="tbl-empty"><i class="ti ti-loader-2"></i>Running…</div></td></tr>';
+    try {
+      const r = await get(`/api/reports/${cur.key}`, params());
+      const numCol = r.columns.map((_, i) => r.rows.some(row => typeof row[i] === 'string' && /^-?\d+(\.\d+)?$/.test(row[i])) && !/id|row|serial|ref|invoice|txn|plaza|code/i.test(r.columns[i]));
+      $('#rh').innerHTML = `<tr>${r.columns.map((c, i) => `<th class="${numCol[i] ? 'num' : ''}">${esc(c)}</th>`).join('')}</tr>`;
+      $('#rb').innerHTML = r.rows.map(row => `<tr${row[0] === 'TOTAL' ? ' style="font-weight:800;background:#F8FAFC"' : ''}>${row.map((v, i) => `<td class="${numCol[i] ? 'num' : ''}">${v === null || v === undefined ? '' : numCol[i] && v !== '' ? money(v) : esc(v)}</td>`).join('')}</tr>`).join('')
+        || `<tr><td colspan=${r.columns.length}><div class="tbl-empty">No data for the selected filters</div></td></tr>`;
+      $('#rcount').textContent = `${r.rows.length} row(s)`;
+    } catch (e) { errToast(e); $('#rb').innerHTML = ''; }
+  }
+  $('#run').onclick = run;
+  $$('[data-x]').forEach(b => b.onclick = () => cur && ERP.download(`/api/reports/${cur.key}/export?` + new URLSearchParams({ ...params(), fmt: b.dataset.x })));
+  init().catch(errToast);
+})();
+</script>
+{% endblock %}

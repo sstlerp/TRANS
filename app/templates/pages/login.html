@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="en-IN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sign in · {{ app_name }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&family=Sora:wght@700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/vendor/tabler-icons/tabler-icons.min.css">
+<link rel="stylesheet" href="/static/css/erp.css"></head>
+<body><div class="login-shell"><div class="login-card">
+  <div class="m-head"><i class="ti ti-truck-delivery" style="font-size:1.3rem"></i><h3>{{ app_name }} — Sign in</h3></div>
+  <form method="post" action="/login" autocomplete="on">
+    {% if error %}<div class="note note-err"><i class="ti ti-alert-circle"></i><div>{{ error }}</div></div>{% endif %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <div class="f-group"><label class="f-label" for="u">Username</label><input class="f-input" id="u" name="username" required autofocus autocomplete="username"></div>
+    <div class="f-group"><label class="f-label" for="p">Password</label><input class="f-input" id="p" type="password" name="password" required autocomplete="current-password"></div>
+    <button class="m-btn m-btn--ok" style="justify-content:center;padding:.5rem"><i class="ti ti-login"></i> Sign in</button>
+    <div style="font-size:.66rem;color:#64748B;text-align:center">{{ brand_company_name }} · {{ today }}</div>
+  </form></div></div></body></html>
