@@ -27,18 +27,28 @@ const Master = (() => {
     await loadList();
     const open = url.get('id');
     if (open) view(+open);
+    else if (M.perms.create) doNew(false);
+    else setMode('LIST');
   }
 
   // ───────────────────────── toolbar ─────────────────────────
   function renderToolbar() {
-    $('#tb-right').innerHTML = (M.perms.create ? `<button class="tb-btn tb-btn--new" id="btn-new"><i class="ti ti-plus"></i> New</button>` : '') +
+    $('#tb-right').innerHTML = (M.perms.create ? `<button class="tb-btn tb-btn--new" id="btn-new" title="Start a new entry (clears the form)"><i class="ti ti-plus"></i> New</button>` : '') +
       (M.perms.edit ? `<button class="tb-btn tb-btn--new" id="btn-edit" style="display:none"><i class="ti ti-edit"></i> Edit</button>` : '') +
-      `<button class="tb-btn tb-btn--save" id="btn-save" style="display:none"><i class="ti ti-device-floppy"></i> Save</button>
-       <button class="tb-btn tb-btn--cancel" id="btn-cancel" style="display:none"><i class="ti ti-x"></i> Close</button>`;
-    $('#btn-new') && ($('#btn-new').onclick = doNew);
+      `<button class="tb-btn tb-btn--save" id="btn-save" style="display:none"><i class="ti ti-device-floppy"></i> <span class="save-lbl">Save</span></button>
+       <button class="tb-btn tb-btn--cancel" id="btn-cancel" style="display:none"><i class="ti ti-x"></i> Cancel</button>`;
+    $('#form-actions').innerHTML = `<button type="button" class="fa-btn fa-btn--save" id="fa-save"><i class="ti ti-device-floppy"></i> <span class="save-lbl">Save</span></button>
+      <button type="button" class="fa-btn fa-btn--clear" id="fa-clear"><i class="ti ti-eraser"></i> Clear</button>`;
+    $('#btn-new') && ($('#btn-new').onclick = () => doNew());
     $('#btn-edit') && ($('#btn-edit').onclick = () => setMode('EDIT'));
-    $('#btn-save').onclick = doSave;
+    $('#btn-save').onclick = () => doSave();
+    $('#fa-save').onclick = () => doSave();
+    $('#fa-clear').onclick = () => S.id ? doClose() : doNew();
     $('#btn-cancel').onclick = doClose;
+    let hidden = false; try { hidden = localStorage.getItem('formhide:' + KEY) === '1'; } catch (_) { }
+    const applyHide = () => { $('#form-block').classList.toggle('fb-collapsed', hidden); };
+    $('#fb-toggle').onclick = () => { hidden = !hidden; try { localStorage.setItem('formhide:' + KEY, hidden ? '1' : '0'); } catch (_) { } applyHide(); };
+    applyHide();
     if (M.description) $('#page-desc').innerHTML = `<div class="note note-info"><i class="ti ti-info-circle"></i><div>${esc(M.description)}</div></div>`;
   }
 
@@ -231,12 +241,20 @@ const Master = (() => {
   function setMode(mode) {
     S.mode = mode;
     const show = (id, v) => { const e = $(id); if (e) e.style.display = v ? '' : 'none'; };
-    $('#form-wrap').style.display = mode === 'LIST' ? 'none' : '';
-    show('#btn-new', mode === 'LIST' || mode === 'VIEW');
+    const editing = mode === 'NEW' || mode === 'EDIT';
+    $('#form-block').style.display = mode === 'LIST' ? 'none' : '';
+    show('#btn-new', true);
     show('#btn-edit', mode === 'VIEW' && S.id && M.perms.edit);
-    show('#btn-save', mode === 'NEW' || mode === 'EDIT');
-    show('#btn-cancel', mode !== 'LIST');
-    $('#vsb').classList.toggle('show', mode !== 'LIST');
+    show('#btn-save', editing);
+    show('#btn-cancel', !!S.id);
+    show('#form-actions', editing);
+    $$('.save-lbl').forEach(e => e.textContent = mode === 'EDIT' ? 'Update' : 'Save');
+    $('#vsb').classList.toggle('show', !!S.id && mode !== 'LIST');
+    const badge = $('#mode-badge');
+    badge.textContent = { NEW: 'New entry', EDIT: 'Editing', VIEW: 'Viewing', LIST: 'Records' }[mode];
+    badge.className = 'vnd-mode-badge vnd-mode-badge--' + mode.toLowerCase();
+    $('#fb-hint').textContent = mode === 'NEW' ? 'Fill the form and press Save — the record appears in the table below.'
+      : mode === 'EDIT' ? 'Change the fields and press Update, or Cancel to discard.' : mode === 'VIEW' ? 'Select another row below to open it.' : '';
     setEditable(mode === 'NEW' || mode === 'EDIT');
     updateVsb();
     if (EXT.onMode) EXT.onMode(api(), mode);
@@ -249,8 +267,9 @@ const Master = (() => {
     }
     for (const c of M.children) $(`#rows-${c.key}`).innerHTML = '';
   }
-  function doNew() {
+  function doNew(focus = true) {
     S.id = null; S.rec = null;
+    $$('#list-body tr.selected').forEach(tr => tr.classList.remove('selected'));
     clearForm();
     $('#vsb-details').innerHTML = ''; $('#vsb-strip').style.display = 'none';
     for (const [k, v] of Object.entries(S.filters)) {
@@ -260,8 +279,10 @@ const Master = (() => {
     for (const c of M.children) if (c.min_rows) addChildRow(c, {});
     setMode('NEW');
     if (EXT.onLoad) EXT.onLoad(api(), null);
-    const first = M.fields.find(f => !f.readonly); first && $(`#fld-${first.name}`)?.focus();
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (focus) {
+      const first = M.fields.find(f => !f.readonly); first && $(`#fld-${first.name}`)?.focus({ preventScroll: true });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
   }
   async function view(id, mode = 'VIEW') {
     try {
@@ -274,10 +295,15 @@ const Master = (() => {
       renderVsbDetails(r);
       if (EXT.onLoad) EXT.onLoad(api(), r);
       $$('#list-body tr').forEach(tr => tr.classList.toggle('selected', +tr.dataset.id === id));
+      $('#form-block').classList.remove('fb-collapsed');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { errToast(e); }
   }
-  function doClose() { S.id = null; S.rec = null; clearForm(); setMode('LIST'); }
+  function doClose() {
+    if (M.perms.create) return doNew(false);
+    S.id = null; S.rec = null; clearForm(); setMode('LIST');
+    $$('#list-body tr.selected').forEach(tr => tr.classList.remove('selected'));
+  }
 
   function setErr(name, msg) {
     const el = $(`#fld-${name}`), er = $(`#fld-${name}-err`);
@@ -308,10 +334,12 @@ const Master = (() => {
     if (miss.length) { miss.forEach(f => setErr(f.name, 'Required')); return toast('Please fill the required fields', 'err'); }
     try {
       const r = S.id ? await put(`/api/masters/${KEY}/${S.id}`, data) : await post(`/api/masters/${KEY}`, data);
-      toast(S.id ? 'Saved' : 'Created');
+      toast(S.id ? 'Updated' : 'Saved');
       (r._warnings || []).forEach(w => toast(w, 'warn', 6000));
       await loadList();
-      await view(r.id);
+      if (M.perms.create && !EXT.keepAfterSave) doNew(false); else await view(r.id);
+      const tr = $(`#list-body tr[data-id="${r.id}"]`);
+      if (tr) { tr.classList.add('flash'); setTimeout(() => tr.classList.remove('flash'), 2600); }
     } catch (e) { handleSaveError(e, reason => doSave({ ...extra, override: true, override_reason: reason, reason })); }
   }
 
@@ -335,10 +363,12 @@ const Master = (() => {
       if (el.tagName === 'SELECT') { const o = el.options[el.selectedIndex]; return o && o.value ? o.textContent : ''; } return el.value || ''; };
     $('#vsb-id').textContent = M.code_field ? val(M.code_field) || (S.id ? '#' + S.id : '') : (S.id ? '#' + S.id : '');
     $('#vsb-name').textContent = val(M.title_field) || (S.mode === 'NEW' ? 'New ' + M.title : '');
+    const nm = val(M.title_field) || (S.id ? '#' + S.id : '');
+    $('#fb-title').textContent = S.mode === 'NEW' ? 'New entry' : S.mode === 'EDIT' ? `Edit — ${nm}` : S.mode === 'VIEW' ? `View — ${nm}` : 'Entry form';
     $('#vsb-sub').textContent = (M.subtitle_fields || []).map(val).filter(Boolean).join(' · ');
     const st = M.status_field && S.rec ? S.rec[M.status_field] : null;
     $('#vsb-status').innerHTML = st ? pill(st) : (S.rec && M.has_active ? (S.rec.is_active ? pill('ACTIVE') : pill('CANCELLED').replace('CANCELLED', 'INACTIVE')) : '');
-    $('#vsb-actions').innerHTML = S.id && S.mode === 'VIEW' ? actionButtons(S.rec, true) : '';
+    $('#vsb-actions').innerHTML = S.id ? actionButtons(S.rec, true) : '';
     wireActionButtons($('#vsb-actions'), S.rec);
   }
   function renderVsbDetails(r) {
@@ -451,7 +481,7 @@ const Master = (() => {
         ${M.has_active ? `<td style="text-align:center"><span class="v-dot ${r.is_active ? 'on' : 'off'}"></span></td>` : ''}
         <td style="text-align:right" class="no-print" onclick="event.stopPropagation()">${actionButtons(r, false)}</td></tr>`).join('');
       $$('#list-body tr.clickable').forEach(tr => {
-        tr.onclick = () => view(+tr.dataset.id);
+        tr.onclick = () => view(+tr.dataset.id, M.perms.edit ? 'EDIT' : 'VIEW');
         const r = data.items.find(x => x.id === +tr.dataset.id);
         wireActionButtons(tr, r);
       });

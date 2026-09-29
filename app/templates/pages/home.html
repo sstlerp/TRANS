@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Main Dashboard · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="home-h1">Modules</h1>
+<p class="lead">Select a module to open. &nbsp;·&nbsp; {{ today }}</p>
+
+<div class="home-search">
+  <i class="ti ti-search"></i>
+  <input id="global-search" placeholder="Quick search — vehicle, driver, tyre, invoice, UTR…" autocomplete="off">
+  <div class="hdr-search-results" id="global-search-results"></div>
+</div>
+
+{% if modules %}
+<div class="mod-grid">
+  {% for m in modules %}
+  <a class="mod mod--{{ m.colour }}" href="/m/{{ m.key }}">
+    <div class="mod__head">
+      <div class="mod__icon"><i class="ti {{ m.icon }}" aria-hidden="true"></i></div>
+      <h3 class="mod__title">{{ m.title }}</h3>
+    </div>
+    <p class="mod__desc">{{ m.desc }}</p>
+    <div class="mod__footer"><span class="mod__count">{{ m['items']|length }} screen{{ 's' if m['items']|length != 1 }}</span>
+      <span class="mod__enter">Open <i class="ti ti-arrow-right"></i></span></div>
+  </a>
+  {% endfor %}
+</div>
+{% else %}
+<p class="lead">No modules are assigned to your login. Contact the administrator.</p>
+{% endif %}
+{% endblock %}

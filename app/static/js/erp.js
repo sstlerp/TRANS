@@ -148,26 +148,6 @@ const ERP = (() => {
 
   // ── shell behaviours ───────────────────────────────────────────
   function initShell() {
-    const btn = $('#side-toggle');
-    if (btn) btn.onclick = () => {
-      if (window.innerWidth <= 1000) document.body.classList.toggle('side-open');
-      else document.body.classList.toggle('side-collapsed');
-    };
-    $$('.nav-group-h').forEach(h => h.onclick = () => {
-      const g = h.parentElement; g.classList.toggle('closed');
-      try { localStorage.setItem('nav:' + g.dataset.g, g.classList.contains('closed') ? '0' : '1'); } catch (_) { }
-    });
-    const here = location.pathname + location.search;
-    let best = null;
-    $$('.nav-items a').forEach(a => {
-      const href = a.getAttribute('href');
-      if (href === here || (href === location.pathname && !best)) best = a;
-    });
-    $$('.nav-group').forEach(g => {
-      let open = null; try { open = localStorage.getItem('nav:' + g.dataset.g); } catch (_) { }
-      if (open === '0') g.classList.add('closed');
-    });
-    if (best) { best.classList.add('active'); best.closest('.nav-group').classList.remove('closed'); }
     // unread alerts badge
     get('/api/notifications/unread-count').then(r => {
       const b = $('#notif-count'); if (b && r.count) { b.textContent = r.count > 99 ? '99+' : r.count; b.style.display = 'inline'; }
@@ -189,7 +169,7 @@ const ERP = (() => {
           } catch (e) { res.style.display = 'none'; }
         }, 250);
       });
-      document.addEventListener('click', e => { if (!e.target.closest('.hdr-search')) res.style.display = 'none'; });
+      document.addEventListener('click', e => { if (!e.target.closest('.home-search')) res.style.display = 'none'; });
     }
     document.addEventListener('focusin', e => {
       if (e.target.matches('.f-input')) setTimeout(() => e.target.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 80);

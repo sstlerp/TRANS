@@ -4,7 +4,7 @@
 
 | Layer | Location | Responsibility |
 |---|---|---|
-| Presentation | `app/templates/*.html`, `app/static/js/*.js`, `app/static/css/erp.css` | Server-rendered pages in the house design; all data via REST. `master.js` renders every master/transaction screen from metadata; dedicated pages for dashboard, import wizard, reconciliation workbench, tyre dashboard, renewal dashboard/calendar and reports. |
+| Presentation | `app/templates/*.html`, `app/static/js/*.js`, `app/static/css/erp.css` | Server-rendered pages in the SSTL-ERP design (home → module cards → form cards → form-on-top / table-below screens); all data via REST. `master.js` renders every master/transaction screen from metadata; dedicated pages for dashboard, import wizard, reconciliation workbench, tyre dashboard, renewal dashboard/calendar and reports. |
 | API | `app/api/*` | Authentication, generic `/api/masters/{screen}` CRUD, domain endpoints (reconciliation, imports, tyres, reports, dashboard, jobs, integrations), documents. Each request = one DB transaction committed at the end (`api/deps.commit`). |
 | Services | `app/services/*` | All business rules. No SQL in templates or routes beyond simple reads. Services `flush()` but never `commit()`, so callers control atomicity. |
 | Data access | `app/models/*` (SQLAlchemy 2 ORM), `app/database.py` | Normalised schema, constraints, indexes. |
@@ -24,7 +24,7 @@ columns, FK/lookup sources, child grids, row actions, hooks). `app/services/mast
 * audit (CREATE / UPDATE with field-level diff / ACTIVATE / DEACTIVATE / SOFT_DELETE / action-specific entries);
 * branch restriction (direct `branch_id` or via the vehicle).
 
-Adding a new master screen = add a model + a `MasterSpec` + a menu entry; the UI appears automatically.
+Adding a new master screen = add a model + a `MasterSpec` + a menu entry (`registry.menu()`, optional card text in `SCREEN_DESC`); the card and the screen appear automatically. Module cards (title, colour, icon, text) are in `registry.MODULES`.
 
 ## Module map
 

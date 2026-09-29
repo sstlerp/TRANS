@@ -6,10 +6,11 @@ the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, 
 
 * **Backend:** Python 3.11+, FastAPI (REST + OpenAPI), SQLAlchemy 2 ORM, Alembic migrations, service layer.
 * **Database:** MySQL 8 / MariaDB 10.6+ (InnoDB, utf8mb4). SQLite is used only as a fallback for quick tests.
-* **Frontend:** server-rendered HTML pages (Jinja2) + vanilla JavaScript calling the REST API, in the same design
-  system as the supplied `employee_master.html` template (dark toolbar with centred title pill, sky-blue section
-  heads, VSB summary bar, compact 3-column forms, navy-gradient tables, modals, toasts). Responsive for desktop,
-  laptop and tablet. **All dates are shown as DD/MM/YYYY.**
+* **Frontend:** server-rendered HTML pages (Jinja2) + vanilla JavaScript calling the REST API, with the same
+  structure and colours as SSTL-ERP: a Main Dashboard of module cards → module page of screen cards → data-entry
+  screen with the entry form in the upper part and its records table below (navy header with user pill, dark
+  sub-header with centred title pill, sky-blue section heads, SSTL module colours, self-hosted Sora / Plus Jakarta
+  Sans fonts). Responsive for desktop, laptop, tablet and phone. **All dates are shown as DD/MM/YYYY.**
 
 ---
 

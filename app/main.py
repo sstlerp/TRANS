@@ -43,7 +43,7 @@ from app.api import auth as auth_api
 from app.api import domain as domain_api
 from app.api import masters as masters_api
 from app.services import masters
-from app.services.registry import menu
+from app.services.registry import module_for, modules
 
 BASE = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE / "templates"))
@@ -89,15 +89,24 @@ def create_app() -> FastAPI:
     return app
 
 
+def _user_kind(user: CurrentUser) -> tuple[str, str]:
+    """Header user-pill colour class and label (SSTL-ERP pill colours)."""
+    if user.is_superuser:
+        return "SUPERUSER", "Administrator"
+    if user.has("admin.edit"):
+        return "ADMIN", "Admin"
+    if any(p.endswith((".create", ".edit", ".*")) for p in user.permissions):
+        return "DATA_ENTRY", "Data entry"
+    return "VIEWER", "Viewer"
+
+
 def _ctx(request: Request, user: CurrentUser | None, **extra) -> dict:
     s = get_settings()
-    nav = []
-    if user:
-        for group, items in menu():
-            allowed = [i for i in items if user.has(i[3])]
-            if allowed:
-                nav.append((group, allowed))
-    return {"request": request, "user": user, "nav": nav, "app_name": s.app_name, "brand_company_name": s.company_name,
+    mods = modules(user.has) if user else []
+    utype, ulabel = _user_kind(user) if user else ("", "")
+    return {"request": request, "user": user, "modules": mods, "user_type": utype, "user_label": ulabel,
+            "current_module": module_for(request.url.path, request.url.query, mods),
+            "app_name": s.app_name, "brand_company_name": s.company_name,
             "today": fmt_date(today()), "csrf": request.cookies.get("erp_csrf", ""), **extra}
 
 
@@ -138,7 +147,20 @@ def _pages(app: FastAPI) -> None:
         resp.delete_cookie("erp_csrf", path="/")
         return resp
 
-    app.get("/", response_class=HTMLResponse, include_in_schema=False)(_page("pages/dashboard.html", "dashboard.view"))
+    app.get("/", response_class=HTMLResponse, include_in_schema=False)(_page("pages/home.html"))
+    app.get("/dashboard", response_class=HTMLResponse, include_in_schema=False)(
+        _page("pages/dashboard.html", "dashboard.view"))
+
+    @app.get("/m/{key}", response_class=HTMLResponse, include_in_schema=False)
+    def module_page(key: str, request: Request, user: CurrentUser | None = Depends(get_current_user_optional)):
+        if not user:
+            return RedirectResponse(f"/login?next={request.url.path}", 303)
+        ctx = _ctx(request, user)
+        mod = next((m for m in ctx["modules"] if m["key"] == key), None)
+        if not mod:
+            return templates.TemplateResponse(request, "pages/forbidden.html", _ctx(request, user, perm="(module)"), 404)
+        ctx["current_module"] = mod
+        return templates.TemplateResponse(request, "pages/module.html", ctx)
     app.get("/account/password", response_class=HTMLResponse, include_in_schema=False)(_page("pages/password.html"))
     app.get("/imports", response_class=HTMLResponse, include_in_schema=False)(_page("pages/import.html", "import.view"))
     app.get("/finance/reconciliation", response_class=HTMLResponse, include_in_schema=False)(

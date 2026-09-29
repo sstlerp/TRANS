@@ -54,7 +54,7 @@ browser against a seeded MySQL instance.
 | 47 | Profitability and cost reports | `reports.profitability`, category costs, 20+ reports | test_reports::* · test_api::test_dashboard_and_reports_api |
 | 48 | Important changes auditable | `audit_logs` with diffs + reasons; domain histories | test_api::test_master_crud_audit_and_soft_delete · test_bank::test_reverse_and_unlink_are_audited |
 | 49 | RBAC works | permissions/roles/branch restriction/approvals | test_api::test_rbac_* · test_branch_restriction · test_bank::test_large_allocation_requires_approval |
-| 50 | Responsive | CSS grid breakpoints (1100/1000/700 px), collapsible sidebar | browser check |
+| 50 | Responsive | CSS grid breakpoints (1100/1000/700 px), card navigation that wraps to one column on phones | browser check |
 | 51 | Dates display DD/MM/YYYY | UI formatters, exports, input masks; day-first parsing | test_transforms::test_date_parsing_is_day_first · test_api::test_dates_accept_ddmmyyyy_and_return_iso · test_exports |
 | 52 | Large imports handled safely | staging rows, bulk flushes, SAVEPOINT per row, background commit with progress, full rollback on failure | test_imports::test_progress_callback_and_row_isolation |
 | 53 | Errors recoverable | friendly error model, error register + resolution, unmatch/reverse, re-import safe | test_api::test_validation_errors_are_friendly · test_imports::test_error_register_shows_row_column_and_can_be_resolved |

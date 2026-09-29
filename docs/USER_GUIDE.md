@@ -1,8 +1,17 @@
 # User guide (workflows)
 
-All screens share one layout: a dark toolbar with the screen title and **New / Edit / Save / Close**, a sticky
-summary bar (VSB) for the open record with its status and quick actions, a sectioned form, and the list below with
-search (partial or *exact*), filters, date range, sorting (click headers), pagination and Excel/CSV/PDF/print.
+**Navigation (same structure as SSTL-ERP):** after signing in, the **Main Dashboard** shows one card per module
+(Fleet, Drivers, Compliance, Finance, Fuel, Toll, Tyres …). Click a module card to see the cards of its screens, then
+click a screen card to open it. The header always has **Main Dashboard**, a button back to the current module, alerts,
+change password and **Sign out**. Quick search (vehicle, driver, tyre, invoice, UTR …) is on the Main Dashboard.
+The executive dashboard is under **Dashboard → Executive Dashboard**.
+
+**Data-entry screens:** the upper part is the entry form and the lower part is the table of records for that form.
+A blank form is ready when the screen opens — fill it and press **Save**; the form clears for the next entry and the
+new row is highlighted in the table. Click any row to load it into the form, change it and press **Update** (or
+**Cancel**). The summary bar (VSB) above the form shows the open record's status and quick actions. The ⌃ button
+hides the form when you only want to browse. The table has search (partial or *exact*), filters, date range, sorting
+(click headers), pagination and Excel/CSV/PDF/print.
 Row menu (⋯): actions, **Documents**, **Audit history**, activate/deactivate, delete (soft). Dates are typed and shown
 as **DD/MM/YYYY** (time as HH:MM).
 

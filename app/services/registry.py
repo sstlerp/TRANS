@@ -1303,7 +1303,7 @@ def menu() -> list[tuple[str, list[tuple[str, str, str, str]]]]:
     """Navigation (spec §61): (group, [(label, url, icon, permission)])."""
     m = lambda k, label=None: (label or _R[k].title, f"/masters/{k}", _R[k].icon, _R[k].perm("view"))  # noqa: E731
     return [
-        ("Dashboard", [("Executive Dashboard", "/", "ti-dashboard", "dashboard.view"),
+        ("Dashboard", [("Executive Dashboard", "/dashboard", "ti-dashboard", "dashboard.view"),
                        ("Alerts", "/masters/notifications", "ti-bell", "notification.view"),
                        ("Approvals", "/masters/approval_requests", "ti-checklist", "approval.view")]),
         ("Organization", [m("companies"), m("branches"), m("departments"), m("locations", "Locations / Godowns"),
@@ -1364,3 +1364,156 @@ def menu() -> list[tuple[str, list[tuple[str, str, str, str]]]]:
                             m("notification_rules"), m("approval_rules"), m("api_integrations", "API Integrations"),
                             m("audit_logs"), m("documents")]),
     ]
+
+
+# ── Module cards (home page → module page → form), in the SSTL-ERP card-navigation style ──────────────────────
+# (menu group, url key, card colour, icon, description). Colours are the SSTL-ERP module card variants.
+MODULES = [
+    ("Dashboard", "dashboard", "deep-blue", "ti-layout-dashboard", "Executive dashboard, alerts and approvals waiting for you."),
+    ("Fleet", "fleet", "indigo", "ti-truck", "Vehicles, categories, cost centers, classification history and odometer."),
+    ("Drivers", "drivers", "green", "ti-id-badge-2", "Driver master, licences, documents and driver renewals."),
+    ("Compliance", "compliance", "red", "ti-certificate", "Renewal calendar, insurance, tax, permits, fitness, PUCC and PESO."),
+    ("Contracts & Income", "contracts", "teal", "ti-file-certificate", "Customers, contracts, invoices, receivables and receipts."),
+    ("Finance", "finance", "violet", "ti-building-bank", "Banks, statements, reconciliation, allocations and matching rules."),
+    ("Fuel", "fuel", "orange", "ti-gas-station", "Fuel types, stations, cards, transactions, imports and efficiency."),
+    ("Toll", "toll", "amber", "ti-road", "Toll providers, plazas, FASTag mappings, transactions and review."),
+    ("Maintenance", "maintenance", "magenta", "ti-tool", "Maintenance types, job cards with parts and labour, cost reports."),
+    ("Tyres", "tyres", "cyan", "ti-wheel", "Tyre master, stock, fitments, movements, retreading and warranty."),
+    ("Vendors", "vendors", "rose", "ti-building-store", "Suppliers, service providers and vendor invoices / expenses."),
+    ("Imports", "imports", "sky", "ti-file-import", "Excel import wizard, templates, providers, mappings and history."),
+    ("Reports", "reports", "slate", "ti-report-analytics", "Report centre, profitability and category cost analysis."),
+    ("Organization", "organization", "purple", "ti-building", "Companies, branches, departments, locations, states and RTOs."),
+    ("Administration", "admin", "deep-blue", "ti-user-shield", "Users, roles, permissions, settings, lookups and audit log."),
+]
+# Card colours used in turn for the form cards inside a module page.
+CARD_COLOURS = ["deep-blue", "red", "green", "orange", "purple", "magenta", "teal", "cyan", "amber", "violet", "rose", "indigo"]
+
+ITEM_DESC = {
+    "/dashboard": "Fleet, compliance, finance and operations at a glance.",
+    "/compliance": "Upcoming and overdue renewals with a calendar view.",
+    "/finance/reconciliation": "Match bank credits and allocate debits to cost centers.",
+    "/imports": "Upload an Excel/CSV statement, map columns, preview and import.",
+    "/tyres/dashboard": "Axle-wise view of fitted tyres with tread and history.",
+    "/reports": "All reports with Excel, CSV, PDF export and print.",
+}
+
+
+# Card text for the form screens (by master key).
+SCREEN_DESC = {
+    "notifications": "Renewal, maintenance and exception alerts raised for you.",
+    "approval_requests": "Requests waiting for approval, with approve / reject.",
+    "vehicles": "Vehicle register: identity, classification, ownership, capacity and fuel.",
+    "sub_category_attributes": "Technical fields captured per vehicle sub-category.",
+    "vehicle_cc_history": "Effective-dated category / cost-center history per vehicle.",
+    "odometer_readings": "Odometer readings with chronology checks.",
+    "drivers": "Driver details, licence, engagement and contact.",
+    "insurance_policies": "Vehicle insurance policies, premium and renewal.",
+    "vehicle_renewals": "Every vehicle renewal: tax, permit, fitness, PUCC, PESO.",
+    "renewal_assignments": "Which renewals apply to each vehicle.",
+    "renewal_types": "Renewal types and their reminder settings.",
+    "renewal_rules": "Rules that assign renewal types to vehicle categories.",
+    "renewal_history": "History of completed renewals.",
+    "customers": "Customer master with GST, contact and credit terms.",
+    "contracts": "Customer contracts, rates, period and allocated vehicles.",
+    "invoices": "Invoices, credit notes and advances with vehicle allocation.",
+    "banks": "Bank master.",
+    "bank_accounts": "Company bank accounts and statement templates.",
+    "bank_transactions": "Imported bank statement lines and their status.",
+    "financial_links": "Links settling bank lines against invoices and costs.",
+    "bank_allocations": "Bank debits allocated to cost centers.",
+    "recon_history": "Every reconciliation action, for audit.",
+    "credit_types": "Classification types for bank credits.",
+    "expense_types": "Expense heads for debits and vendor invoices.",
+    "matching_rules": "Auto-suggestion rules for reconciliation.",
+    "fuel_types": "Diesel, petrol, CNG, LPG and other fuels.",
+    "fuel_stations": "Fuel stations / pumps and their provider.",
+    "fuel_cards": "Fuel / fleet cards and the vehicles they belong to.",
+    "fuel_transactions": "Fuel fills with quantity, rate and odometer.",
+    "toll_plazas": "Toll plaza master with location.",
+    "toll_vehicle_mappings": "FASTag / tag-to-vehicle mappings per provider.",
+    "toll_transactions": "Toll deductions matched to vehicles and plazas.",
+    "maintenance_types": "Service and repair types with due intervals.",
+    "job_cards": "Workshop job cards with parts, labour and downtime.",
+    "tyres": "Tyre register: serial, brand, size, status and cost.",
+    "tyre_movements": "Fit, remove, rotate and transfer history of tyres.",
+    "tyre_inspections": "Tread depth and pressure inspections.",
+    "tyre_retreading": "Tyres sent for retreading and their return.",
+    "tyre_warranty_claims": "Warranty claims and settlements.",
+    "tyre_maintenance": "Puncture and repair records.",
+    "tyre_positions": "Wheel positions used in tyre layouts.",
+    "tyre_locations": "Godowns and places where tyres are stored.",
+    "vendors": "Suppliers, workshops and service providers.",
+    "expenses": "Vendor invoices / expenses split across cost centers.",
+    "import_templates": "Column mappings and rules for each statement layout.",
+    "providers": "Banks, toll, fuel, insurance and service providers.",
+    "value_mappings": "Translate provider values to ERP masters.",
+    "import_batches": "Every import run with counts and status.",
+    "import_errors": "Rows that failed to import, with reasons.",
+    "companies": "Company master with GST and address.",
+    "branches": "Branches of each company.",
+    "departments": "Departments for users and cost centers.",
+    "locations": "Locations, godowns, workshops and warehouses.",
+    "states": "States with GST state codes.",
+    "districts": "Districts by state.",
+    "rtos": "Regional transport offices.",
+    "users": "User logins, roles and branch access.",
+    "roles": "Roles and their permissions.",
+    "permissions": "Permission list used by roles.",
+    "lookup_values": "Drop-down lists used across the forms.",
+    "units": "Units of measure.",
+    "transaction_types": "Transaction types for finance and imports.",
+    "business_rules": "System settings and configurable business rules.",
+    "notification_rules": "When and to whom alerts are sent.",
+    "approval_rules": "Which actions need approval and by whom.",
+    "audit_logs": "Who changed what and when.",
+    "documents": "All uploaded documents and versions.",
+}
+
+
+def _item_desc(label: str, url: str) -> str:
+    if url in ITEM_DESC:
+        return ITEM_DESC[url]
+    if url.startswith("/masters/") and "?" not in url and url.rsplit("/", 1)[-1] in SCREEN_DESC:
+        return SCREEN_DESC[url.rsplit("/", 1)[-1]]
+    if url.startswith("/masters/"):
+        key = url.split("?")[0].rsplit("/", 1)[-1]
+        spec = _R.get(key)
+        if spec and spec.description and "?" not in url:
+            return spec.description
+        if "?" in url:
+            return f"{label} — filtered view of {spec.title if spec else key}."
+        return f"Add, edit, search and export {label.lower()}."
+    if url.startswith("/reports"):
+        return f"{label} report with export and print."
+    if url.startswith("/imports"):
+        return f"{label}: upload and import statement files."
+    if url.startswith("/finance/reconciliation"):
+        return f"{label} in the reconciliation workbench."
+    if url.startswith("/compliance"):
+        return f"{label} — due and overdue items."
+    return label
+
+
+def modules(has=lambda perm: True) -> list[dict]:
+    """Module cards for the home page; each with the form cards the user is allowed to open."""
+    groups = dict(menu())
+    out = []
+    for group, key, colour, icon, desc in MODULES:
+        items = [{"label": label, "url": url, "icon": ic, "perm": perm, "desc": _item_desc(label, url),
+                  "colour": CARD_COLOURS[i % len(CARD_COLOURS)]}
+                 for i, (label, url, ic, perm) in enumerate(groups.get(group, [])) if has(perm)]
+        if items:
+            out.append({"key": key, "title": group, "colour": colour, "icon": icon, "desc": desc, "items": items})
+    return out
+
+
+def module_for(path: str, query: str, mods: list[dict]) -> dict | None:
+    """The module a page belongs to (exact URL match first, then path only)."""
+    full = path + ("?" + query if query else "")
+    for exact in (True, False):
+        for m in mods:
+            for it in m["items"]:
+                u = it["url"]
+                if (u == full) if exact else (u.split("?")[0] == path):
+                    return m
+    return None

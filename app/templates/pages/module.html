@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% set m = current_module %}
+{% block title %}{{ m.title }} · {{ app_name }}{% endblock %}
+{% block content %}
+<h1 class="home-h1">{{ m.title }}</h1>
+<p class="lead">{{ m.desc }}</p>
+
+<div class="mod-grid">
+  {% for it in m['items'] %}
+  <a class="mod mod--sm mod--{{ it.colour }}" href="{{ it.url }}">
+    <div class="mod__head">
+      <div class="mod__icon"><i class="ti {{ it.icon }}" aria-hidden="true"></i></div>
+      <h3 class="mod__title">{{ it.label }}</h3>
+    </div>
+    <p class="mod__desc">{{ it.desc }}</p>
+  </a>
+  {% endfor %}
+</div>
+{% endblock %}

@@ -4,40 +4,37 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{% block title %}{{ app_name }}{% endblock %}</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/vendor/tabler-icons/tabler-icons.min.css">
 <link rel="stylesheet" href="/static/css/erp.css">
 {% block head %}{% endblock %}
 </head>
 <body>
-<header class="app-header">
-  <button class="hdr-btn" id="side-toggle" aria-label="Toggle menu"><i class="ti ti-menu-2"></i></button>
-  <a class="app-brand" href="/"><i class="ti ti-truck-delivery"></i><span>{{ app_name }}<small>{{ brand_company_name }}</small></span></a>
-  {% block nav_extra %}{% endblock %}
-  <div class="hdr-search"><i class="ti ti-search"></i>
-    <input id="global-search" placeholder="Search vehicle, driver, tyre, invoice, UTR…" autocomplete="off">
-    <div class="hdr-search-results" id="global-search-results"></div></div>
-  <span class="hdr-date"><i class="ti ti-calendar"></i> {{ today }}</span>
-  <a class="hdr-btn" href="/masters/notifications?f_is_read=0" title="Alerts"><i class="ti ti-bell"></i><span class="hdr-badge" id="notif-count" style="display:none"></span></a>
-  <div class="hdr-user"><i class="ti ti-user-circle"></i><span>{{ user.full_name if user else '' }}</span>
-    <a class="hdr-btn" href="/account/password" title="Change password"><i class="ti ti-key"></i></a>
-    <a class="hdr-btn" href="/docs" title="API documentation" target="_blank" rel="noopener"><i class="ti ti-api"></i></a>
-    <a class="hdr-btn" href="/logout" title="Sign out"><i class="ti ti-logout"></i></a></div>
-</header>
-<div class="app-shell">
-  <nav class="app-side" aria-label="Main menu">
-    {% for group, items in nav %}
-    <div class="nav-group {% if not loop.first %}closed{% endif %}" data-g="{{ group }}">
-      <div class="nav-group-h">{{ group }} <i class="ti ti-chevron-down"></i></div>
-      <div class="nav-items">
-        {% for label, url, icon, perm in items %}<a href="{{ url }}"><i class="ti {{ icon }}"></i>{{ label }}</a>{% endfor %}
-      </div>
+{# Header in the SSTL-ERP layout: brand left · user pill centre · navigation buttons right #}
+<header class="brand--inner">
+  <a class="bi-brand" href="/" title="Main Dashboard">
+    <span class="bi-logo"><i class="ti ti-truck-delivery"></i></span>
+    <span class="bi-name"><b>{{ app_name }}</b><small>{{ brand_company_name }}</small></span>
+  </a>
+  {% if user %}
+  <div class="bi-center">
+    <div class="bi-pill" data-utype="{{ user_type }}">
+      <div class="bi-pill-name">{{ user.full_name }}</div>
+      <div class="bi-pill-sub"><span class="bi-pill-username">@{{ user.username }}</span><span class="bi-pill-desig">{{ user_label }}</span></div>
     </div>
-    {% endfor %}
+  </div>
+  <nav class="bi-nav" aria-label="Navigation">
+    <a class="bi-btn bi-btn--dashboard" href="/"><i class="ti ti-layout-dashboard"></i><span class="lbl"> Main Dashboard</span></a>
+    {% if current_module %}
+    <a class="bi-btn bi-btn--page" href="/m/{{ current_module.key }}"><i class="ti {{ current_module.icon }}"></i><span class="lbl"> {{ current_module.title }}</span></a>
+    {% endif %}
+    {% block nav_extra %}{% endblock %}
+    <a class="bi-btn bi-btn--icon" href="/masters/notifications?f_is_read=0" title="Alerts"><i class="ti ti-bell"></i><span class="hdr-badge" id="notif-count" style="display:none"></span></a>
+    <a class="bi-btn bi-btn--icon" href="/account/password" title="Change password"><i class="ti ti-key"></i></a>
+    <a class="bi-btn bi-btn--out" href="/logout"><i class="ti ti-logout"></i><span class="lbl"> Sign out</span></a>
   </nav>
-  <main class="app-main">{% block content %}{% endblock %}</main>
-</div>
+  {% endif %}
+</header>
+<main class="page--inner app-main">{% block content %}{% endblock %}</main>
 <div class="vnd-toast" id="vnd-toast"></div>
 <script src="/static/js/erp.js"></script>
 {% block scripts %}{% endblock %}

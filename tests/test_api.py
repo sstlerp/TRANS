@@ -153,11 +153,17 @@ def test_dates_accept_ddmmyyyy_and_return_iso(client, auth, fleet):
 def test_pages_render(client, fleet):
     tok = login(client)
     client.cookies.set("erp_session", tok["access_token"])
-    for url in ("/", "/masters/vehicles", "/masters/tyres", "/imports", "/finance/reconciliation", "/tyres/dashboard",
+    for url in ("/", "/dashboard", "/m/fleet", "/m/tyres", "/m/admin", "/masters/vehicles", "/masters/tyres", "/imports", "/finance/reconciliation", "/tyres/dashboard",
                 "/compliance", "/reports", "/account/password", "/masters/import_templates", "/docs"):
         r = client.get(url)
         assert r.status_code == 200, url
     assert client.get("/masters/nope").status_code == 404
+    assert client.get("/m/nope").status_code == 404
+    home = client.get("/").text
+    assert 'href="/m/fleet"' in home and 'href="/m/finance"' in home          # module cards
+    fleet_page = client.get("/m/fleet").text
+    assert 'href="/masters/vehicles"' in fleet_page                              # form cards
+    assert 'href="/m/fleet"' in client.get("/masters/vehicles").text             # back to its module
     client.cookies.clear()
     r = client.get("/", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"].startswith("/login")
