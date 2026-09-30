@@ -53,7 +53,7 @@ Adding a new master screen = add a model + a `MasterSpec` + a menu entry (`regis
 
 ## Data model
 
-90 tables in the MySQL database **`ERP_LOGISTICS`** (see `migrations/versions/0001_initial_schema.py`, or the
+91 tables in the MySQL database **`ERP_LOGISTICS`** (see `migrations/versions/0001_initial_schema.py`, or the
 plain-SQL equivalent `migrations/sql/0001_initial_schema.sql`). Technical PKs are `BIGINT AUTO_INCREMENT`; business
 identifiers are separate unique columns (vehicle code, registration, serial number, invoice number …). Money is
 `DECIMAL(18,2)`, quantities `DECIMAL(18,3)`, rates `DECIMAL(18,4)`; dates are `DATE`/`DATETIME` (never text).
@@ -64,7 +64,7 @@ Masters carry `created_at/updated_at/created_by/updated_by/is_active/deleted_at`
 * **Drivers & compliance** — `drivers`, `insurance_history`, `insurance_policies`, `renewal_history`, `renewal_rules`, `renewal_types`, `vehicle_renewal_assignments`, `vehicle_renewals`
 * **Contracts, finance, reconciliation & approvals** — `approval_actions`, `approval_requests`, `approval_rules`, `bank_transaction_allocations`, `bank_transactions`, `contract_vehicle_allocations`, `contracts`, `credit_types`, `expense_allocations`, `expense_transactions`, `expense_types`, `financial_transaction_links`, `invoice_allocations`, `invoices`, `matching_rules`, `reconciliation_history`, `transaction_types`
 * **Import engine** — `statement_import_batches`, `statement_import_errors`, `statement_import_rows` (staging: raw + normalised values per source row), `statement_import_templates`, `statement_template_columns`, `value_mappings`
-* **Fuel, toll, maintenance** — `fuel_cards`, `fuel_stations`, `fuel_transactions`, `maintenance_job_cards`, `maintenance_labour`, `maintenance_parts`, `maintenance_types`, `toll_api_configurations` (generic API integration config, type TOLL/FUEL/BANK/GPS…), `toll_plazas`, `toll_transactions`, `toll_vehicle_mappings`
+* **Fuel, toll, maintenance** — `fuel_cards`, `fuel_stations`, `fuel_transactions`, `maintenance_job_cards`, `maintenance_labour`, `maintenance_parts`, `maintenance_types`, `toll_api_configurations` (generic API integration config, type TOLL/FUEL/BANK/GPS/TOLL_PLAZA_MASTER…), `toll_plaza_sync_runs` (toll plaza fetches from the internet — `services/toll_sync.py`, docs/INTEGRATIONS.md), `toll_plazas`, `toll_transactions`, `toll_vehicle_mappings`
 * **Tyres** — `tyre_fitments`, `tyre_inspections`, `tyre_layouts`, `tyre_locations`, `tyre_maintenance`, `tyre_movements`, `tyre_positions`, `tyre_retreading`, `tyre_warranty_claims`, `tyres`, `vehicle_tyre_position_configurations`
 * **Security, audit, documents, notifications, configuration** — `audit_logs`, `background_jobs`, `business_rules`, `document_links`, `documents`, `notification_rules`, `notifications`, `permissions`, `roles`, `users`, `role_permissions`, `user_roles`, `user_branches`
 

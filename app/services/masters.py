@@ -18,6 +18,8 @@ generic layer never contains business logic of its own.
 """
 from __future__ import annotations
 
+import json
+
 import csv
 import io
 import re
@@ -251,6 +253,11 @@ def _coerce(db: Session, f: F, raw: Any) -> Any:
                 raise BusinessError(f"{f.label}: invalid choice '{v}'")
             return v
         elif t == "json":
+            if isinstance(raw, str):
+                try:
+                    return json.loads(raw) if raw.strip() else None
+                except ValueError as exc:
+                    raise BusinessError(f"{f.label}: not valid JSON ({exc})") from exc
             return raw
         else:
             return raw

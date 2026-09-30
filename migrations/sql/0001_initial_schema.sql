@@ -1,11 +1,11 @@
 -- =====================================================================================================
--- TRANS ERP — database ERP_LOGISTICS — full schema up to the latest migration (all tables, keys, indexes, FKs)
+-- TRANS ERP — database ERP_LOGISTICS — migration 0001: initial schema — all ERP tables (organisation, fleet, compliance, finance, imports,
 --
--- Generated from migrations/versions/*.py with:  alembic upgrade head --sql   (scripts/export_sql_migrations.sh)
--- Use it to create the schema directly in MySQL instead of running Alembic:
+-- Generated from migrations/versions/0001_initial_schema.py with:  alembic upgrade 0001 --sql   (scripts/export_sql_migrations.sh)
+-- Use it instead of Alembic by running the files in order:
 --     mysql -u root -p < migrations/sql/0001_initial_schema.sql
--- It creates the database, every ERP table and the alembic_version marker, so later
--- `alembic upgrade head` runs continue from here. Then load reference data with:  python -m app.seed
+-- Each file also updates the alembic_version marker, so later `alembic upgrade head` runs continue from here.
+-- This first file creates the database and every ERP table. Then load reference data with:  python -m app.seed
 -- =====================================================================================================
 
 CREATE DATABASE IF NOT EXISTS `ERP_LOGISTICS` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

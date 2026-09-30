@@ -84,13 +84,18 @@ class FuelTransaction(Base, TxnBase, SourceMixin):
 
 # ───────────────────────────── toll ─────────────────────────────
 class TollPlaza(Base, MasterBase):
+    """Toll plaza master. Rows can be keyed in by hand or fetched from internet sources
+    (services/toll_sync.py); fetched rows always carry toll ID, name, place and state."""
     __tablename__ = "toll_plazas"
+    __table_args__ = (UniqueConstraint("api_source", "external_plaza_id", name="uq_toll_plaza_source_ext"),)
     external_plaza_id: Mapped[str | None] = mapped_column(String(40), index=True)
     plaza_code: Mapped[str] = mapped_column(String(40), unique=True)
     name: Mapped[str] = mapped_column(String(200), index=True)
+    place: Mapped[str | None] = mapped_column(String(150))
     highway: Mapped[str | None] = mapped_column(String(50))
     road: Mapped[str | None] = mapped_column(String(150))
     state_id: Mapped[int | None] = fk("states.id")
+    state_name: Mapped[str | None] = mapped_column(String(100))  # state as given by the source
     district_id: Mapped[int | None] = fk("districts.id")
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
@@ -98,6 +103,28 @@ class TollPlaza(Base, MasterBase):
     provider_id: Mapped[int | None] = fk("providers.id")
     api_source: Mapped[str | None] = mapped_column(String(60))
     api_last_synced_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
+class TollPlazaSyncRun(Base, PKMixin):
+    """One run of the toll plaza fetch from an internet source (history + counts + skipped reasons)."""
+    __tablename__ = "toll_plaza_sync_runs"
+    integration_id: Mapped[int | None] = fk("toll_api_configurations.id")
+    source: Mapped[str] = mapped_column(String(30))
+    states: Mapped[str | None] = mapped_column(String(255))  # state codes requested (blank = all)
+    dry_run: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(20), index=True)  # QUEUED RUNNING SUCCESS PARTIAL FAILED
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, index=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime)
+    states_done: Mapped[int] = mapped_column(Integer, default=0)
+    states_total: Mapped[int] = mapped_column(Integer, default=0)
+    fetched: Mapped[int] = mapped_column(Integer, default=0)
+    created: Mapped[int] = mapped_column(Integer, default=0)
+    updated: Mapped[int] = mapped_column(Integer, default=0)
+    unchanged: Mapped[int] = mapped_column(Integer, default=0)
+    skipped: Mapped[int] = mapped_column(Integer, default=0)
+    skipped_samples: Mapped[list | None] = mapped_column(JSON)  # first reasons, for review
+    error_message: Mapped[str | None] = mapped_column(Text)
+    triggered_by: Mapped[int | None] = fk("users.id")
 
 
 class TollVehicleMapping(Base, MasterBase):

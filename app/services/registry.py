@@ -308,7 +308,8 @@ register(MasterSpec("approval_rules", FI.ApprovalRule, "Approval Rules", "admin"
     group="Administration"))
 
 register(MasterSpec("api_integrations", OP.ApiIntegration, "API Integrations (Toll / Fuel / Bank / GPS)", "admin", "ti-api", [
-    code(30), name(), F("integration_type", "Type", type="select", choices=PROVIDER_TYPES + ["FASTAG", "ACCOUNTING", "GOVT"],
+    code(30), name(), F("integration_type", "Type", type="select",
+                        choices=PROVIDER_TYPES + ["FASTAG", "ACCOUNTING", "GOVT", "TOLL_PLAZA_MASTER"],
                         required=True, list=True, filter=True),
     F("provider_id", "Provider", type="fk", fk="providers", list=True), F("base_url", "Base URL", maxlen=255, span=2),
     F("auth_type", "Auth", type="select", choices=["NONE", "API_KEY", "BASIC", "OAUTH2"]),
@@ -319,7 +320,9 @@ register(MasterSpec("api_integrations", OP.ApiIntegration, "API Integrations (To
     F("timeout_seconds", "Timeout (s)", type="int", default=30),
     F("sync_frequency_minutes", "Sync Every (min)", type="int"),
     F("last_sync_at", "Last Sync", type="datetime", readonly=True, list=True),
-    F("last_sync_status", "Last Status", readonly=True, list=True), F("remarks", "Remarks", maxlen=255, span=2)],
+    F("last_sync_status", "Last Status", readonly=True, list=True), F("remarks", "Remarks", maxlen=255, span=2),
+    F("settings", "Settings (JSON)", type="json", span=3,
+      hint="e.g. adapter, resource_id, records_path, field_map — see docs/INTEGRATIONS.md")],
     group="Administration", description="Secrets are read from environment variables at runtime and never stored."))
 
 # ═════════════════════════════ PARTIES ═════════════════════════════
@@ -854,15 +857,40 @@ register(MasterSpec("fuel_transactions", OP.FuelTransaction, "Fuel Transactions"
 
 # ═════════════════════════════ TOLL ═════════════════════════════
 register(MasterSpec("toll_plazas", OP.TollPlaza, "Toll Plazas", "toll", "ti-road", [
-    F("plaza_code", "Plaza Code", required=True, upper=True, maxlen=40, list=True, search=True),
-    F("external_plaza_id", "External Plaza ID", maxlen=40, list=True, search=True), name(200, "Plaza Name"),
-    F("highway", "Highway", maxlen=50, list=True), F("road", "Road", maxlen=150),
-    F("state_id", "State", type="fk", fk="states", list=True, filter=True),
-    F("district_id", "District", type="fk", fk="districts", depends_on="state_id"),
-    F("latitude", "Latitude", type="decimal"), F("longitude", "Longitude", type="decimal"),
-    F("operator", "Operator", maxlen=150), F("provider_id", "Provider", type="fk", fk="providers"),
-    F("api_source", "API Source", maxlen=60), F("api_last_synced_at", "API Synced", type="datetime", readonly=True)],
-    code_field="plaza_code", label_fields=("plaza_code", "name"), group="Toll"))
+    F("plaza_code", "Plaza Code", required=True, upper=True, maxlen=40, list=True, search=True, section="Plaza"),
+    F("external_plaza_id", "Toll ID (source)", maxlen=40, list=True, search=True, section="Plaza",
+      hint="ID given by NHAI / FASTag / OSM"),
+    F("name", "Toll Plaza Name", required=True, maxlen=200, list=True, search=True, section="Plaza"),
+    F("place", "Place", required=True, maxlen=150, list=True, search=True, filter=True, section="Location"),
+    F("state_id", "State", type="fk", fk="states", required=True, list=True, filter=True, section="Location"),
+    F("district_id", "District", type="fk", fk="districts", depends_on="state_id", section="Location"),
+    F("highway", "Highway", maxlen=50, list=True, section="Location"), F("road", "Road", maxlen=150, section="Location"),
+    F("latitude", "Latitude", type="decimal", section="Location"), F("longitude", "Longitude", type="decimal", section="Location"),
+    F("operator", "Operator", maxlen=150, section="Source"), F("provider_id", "Provider", type="fk", fk="providers", section="Source"),
+    F("api_source", "Fetched From", maxlen=60, list=True, filter=True, readonly=True, section="Source"),
+    F("state_name", "State (as in source)", maxlen=100, readonly=True, section="Source"),
+    F("api_last_synced_at", "Last Fetched", type="datetime", readonly=True, list=True, section="Source")],
+    code_field="plaza_code", label_fields=("plaza_code", "name"), group="Toll",
+    description="Use “Fetch from Internet” to add / update plazas from OpenStreetMap, data.gov.in or a FASTag API. "
+                "Toll ID, name, place and state are compulsory."))
+
+register(MasterSpec("toll_plaza_sync_runs", OP.TollPlazaSyncRun, "Toll Plaza Internet Sync History", "toll", "ti-cloud-download", [
+    F("started_at", "Started", type="datetime", list=True, readonly=True),
+    F("integration_id", "Source", type="fk", fk="api_integrations", list=True, filter=True, readonly=True),
+    F("source", "Adapter", list=True, filter=True, readonly=True), F("states", "States", list=True, readonly=True),
+    F("dry_run", "Dry Run", type="bool", list=True, readonly=True),
+    F("status", "Status", type="select", choices=["QUEUED", "RUNNING", "SUCCESS", "PARTIAL", "FAILED"], list=True,
+      filter=True, readonly=True),
+    F("states_done", "States Done", type="int", readonly=True), F("states_total", "States Total", type="int", readonly=True),
+    F("fetched", "Fetched", type="int", list=True, readonly=True), F("created", "Created", type="int", list=True, readonly=True),
+    F("updated", "Updated", type="int", list=True, readonly=True), F("unchanged", "Unchanged", type="int", list=True, readonly=True),
+    F("skipped", "Skipped", type="int", list=True, readonly=True),
+    F("finished_at", "Finished", type="datetime", list=True, readonly=True),
+    F("triggered_by", "By", type="fk", fk="users", readonly=True),
+    F("error_message", "Errors", type="textarea", readonly=True, span=3),
+    F("skipped_samples", "Skipped Records (reasons)", type="json", readonly=True, span=3)],
+    can_create=False, can_edit=False, can_delete=False, code_field=None, label_fields=("source", "started_at"),
+    group="Toll", default_sort="started_at"))
 
 register(MasterSpec("toll_vehicle_mappings", OP.TollVehicleMapping, "Toll Vehicle Mappings", "toll", "ti-arrows-left-right", [
     F("provider_id", "Provider", type="fk", fk="providers", required=True, list=True, filter=True),
@@ -1337,7 +1365,8 @@ def menu() -> list[tuple[str, list[tuple[str, str, str, str]]]]:
                   ("Fuel Imports", "/imports?type=FUEL", "ti-file-import", "import.view"),
                   ("Fuel Reports", "/reports?r=fuel_efficiency", "ti-chart-line", "report.view")]),
         ("Toll", [("Toll Providers", "/masters/providers?f_provider_type=TOLL", "ti-plug", "master.view"),
-                  m("toll_plazas"), m("toll_vehicle_mappings"), m("toll_transactions"),
+                  m("toll_plazas"), m("toll_plaza_sync_runs", "Toll Plaza Internet Sync"),
+                  m("toll_vehicle_mappings"), m("toll_transactions"),
                   ("Toll Review (unmatched)", "/masters/toll_transactions?f_status=VEHICLE_UNMATCHED,PLAZA_UNMATCHED,VEHICLE_MATCHED",
                    "ti-alert-circle", "toll.view"),
                   ("Toll Imports", "/imports?type=TOLL", "ti-file-import", "import.view"),
@@ -1429,7 +1458,8 @@ SCREEN_DESC = {
     "fuel_stations": "Fuel stations / pumps and their provider.",
     "fuel_cards": "Fuel / fleet cards and the vehicles they belong to.",
     "fuel_transactions": "Fuel fills with quantity, rate and odometer.",
-    "toll_plazas": "Toll plaza master with location.",
+    "toll_plazas": "Toll plaza master — fetch from the internet: toll ID, name, place and state.",
+    "toll_plaza_sync_runs": "History of toll plaza fetches from OpenStreetMap / data.gov.in / FASTag APIs.",
     "toll_vehicle_mappings": "FASTag / tag-to-vehicle mappings per provider.",
     "toll_transactions": "Toll deductions matched to vehicles and plazas.",
     "maintenance_types": "Service and repair types with due intervals.",

@@ -278,6 +278,11 @@ select.f-input[multiple]{background-image:none;min-height:90px;padding-right:.38
 .vnd-table tbody tr.flash td{animation:rowflash 2.6s ease}
 @keyframes rowflash{0%,40%{background:#DCFCE7}100%{background:transparent}}
 
+/* toll plaza internet fetch: state picker */
+.ts-states{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.1rem .6rem;max-height:210px;overflow:auto;
+  border:1px solid #E2E8F0;border-radius:6px;padding:.4rem .6rem;background:#F8FAFC;font-size:.74rem}
+.ts-states label{display:flex;align-items:center;gap:.35rem;cursor:pointer}
+
 /* ── child grid ── */
 .child-wrap{overflow-x:auto}
 .child-tbl{width:100%;border-collapse:collapse;font-size:.72rem}

@@ -80,6 +80,9 @@ VENDOR_PAYMENT, OTHER`.
 * `GET /api/vehicles/attribute-definitions/{sub_category_id}` · `GET /api/vehicles/{id}/classification?on=DD/MM/YYYY`
 * `GET /api/reports` · `GET /api/reports/{key}?…` · `GET /api/reports/{key}/export?fmt=xlsx|csv|pdf`
 * `POST /api/operations/rematch/{toll|fuel}` · `POST /api/admin/jobs/daily`
+* Toll plaza master from the internet (toll ID, name, place, state): `GET /api/toll-plazas/sync/sources`,
+  `GET /api/toll-plazas/sync/states`, `POST /api/toll-plazas/sync`, `GET /api/toll-plazas/sync/runs[/{id}]` — see
+  `docs/INTEGRATIONS.md`.
 * `POST /api/integrations/toll/{provider_id}/transactions` — provider API feed into the same `toll_transactions`
   table (`source_type=API`, provider-scoped duplicate detection):
 

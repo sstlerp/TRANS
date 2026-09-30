@@ -42,5 +42,6 @@
 {% block scripts %}
 <script src="/static/js/master.js"></script>
 {% if spec.key == 'vehicles' %}<script src="/static/js/vehicle_ext.js"></script>{% endif %}
+{% if spec.key == 'toll_plazas' %}<script src="/static/js/toll_plaza_ext.js"></script>{% endif %}
 <script>Master.init({{ spec.key|tojson }});</script>
 {% endblock %}

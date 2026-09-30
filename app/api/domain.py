@@ -501,6 +501,74 @@ def api_toll(provider_id: int, items: list[TollApiTxn], ctx: Ctx = Depends(ctx_d
     return {"created": created, "duplicates": dup}
 
 
+# ───────────────────────── toll plaza master from internet sources ─────────────────────────
+class TollPlazaSyncIn(BaseModel):
+    integration_id: int | None = Field(None, description="API Integration of type TOLL_PLAZA_MASTER (default: first active)")
+    states: list[str] = Field(default_factory=list, description="State codes or names; empty = all of India")
+    dry_run: bool = Field(False, description="Read the source and count what would change, without saving")
+    wait: bool = Field(False, description="Run inside the request instead of in the background")
+
+
+@router.get("/toll-plazas/sync/sources")
+def toll_sync_sources(ctx: Ctx = Depends(ctx_dep)):
+    """Configured internet sources for the toll plaza master."""
+    ctx.user.require("toll.view")
+    from app.services import toll_sync
+    return [{"id": i.id, "code": i.code, "name": i.name, "adapter": (i.settings or {}).get("adapter"),
+             "is_active": i.is_active, "base_url": i.base_url, "needs_key": (i.auth_type or "NONE") != "NONE"
+             or (i.settings or {}).get("adapter") == "DATA_GOV_IN",
+             "key_env_var": i.credential_env_var, "last_sync_at": jsonable(i.last_sync_at),
+             "last_sync_status": i.last_sync_status} for i in toll_sync.integrations(ctx.db)]
+
+
+@router.get("/toll-plazas/sync/states")
+def toll_sync_states(ctx: Ctx = Depends(ctx_dep)):
+    ctx.user.require("toll.view")
+    from app.services.toll_sync import INDIA_STATES
+    return [{"code": c, "name": n} for c, n, *_ in INDIA_STATES]
+
+
+@router.post("/toll-plazas/sync")
+def toll_sync_start(data: TollPlazaSyncIn, background: BackgroundTasks, ctx: Ctx = Depends(ctx_dep)):
+    """Fetch toll plazas (toll ID, name, place, state — all compulsory) from an internet source and
+    create / update the toll plaza master. Runs in the background unless `wait` is true; poll the run."""
+    ctx.user.require("toll.edit")
+    from app.core.audit import audit
+    from app.services import toll_sync
+    integ = toll_sync.get_integration(ctx.db, data.integration_id)
+    states = toll_sync.requested_states(data.states) if data.states else []
+    if data.wait:
+        run = toll_sync.run_now(ctx.db, integ, states, data.dry_run, ctx.user.id)
+    else:
+        run = toll_sync.create_run(ctx.db, integ, states, data.dry_run, ctx.user.id)
+    audit(ctx.db, ctx.user, "SYNC", "toll_plazas", None, None,
+          {"integration": integ.code, "states": states or "ALL", "dry_run": data.dry_run, "run_id": run.id})
+    commit(ctx)
+    if not data.wait:
+        background.add_task(toll_sync.run_background, run.id)
+    return toll_sync.run_to_dict(run)
+
+
+@router.get("/toll-plazas/sync/runs")
+def toll_sync_runs(limit: int = 20, ctx: Ctx = Depends(ctx_dep)):
+    ctx.user.require("toll.view")
+    from app.models.operations import TollPlazaSyncRun
+    from app.services.toll_sync import run_to_dict
+    rows = ctx.db.execute(select(TollPlazaSyncRun).order_by(TollPlazaSyncRun.id.desc()).limit(min(limit, 200))).scalars()
+    return [run_to_dict(r) for r in rows]
+
+
+@router.get("/toll-plazas/sync/runs/{run_id}")
+def toll_sync_run(run_id: int, ctx: Ctx = Depends(ctx_dep)):
+    ctx.user.require("toll.view")
+    from app.models.operations import TollPlazaSyncRun
+    from app.services.toll_sync import run_to_dict
+    run = ctx.db.get(TollPlazaSyncRun, run_id)
+    if not run:
+        raise NotFound("Sync run")
+    return run_to_dict(run)
+
+
 # ───────────────────────── global search ─────────────────────────
 _SEARCH = [("vehicles", "Vehicle", ("registration_number", "vehicle_code", "fleet_number", "chassis_number"), "fleet.view"),
            ("drivers", "Driver", ("name", "driver_code", "license_number"), "driver.view"),

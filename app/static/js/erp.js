@@ -117,7 +117,7 @@ const ERP = (() => {
     UNMATCHED: 'red', EXPIRED: 'red', ERROR: 'red', VEHICLE_UNMATCHED: 'red', FAILED: 'red', REJECTED: 'red', CANCELLED: 'grey', SCRAPPED: 'grey', LOST: 'grey', SOLD: 'grey',
     PARTIALLY_MATCHED: 'amber', PARTIALLY_PAID: 'amber', UPCOMING: 'amber', DUE: 'amber', PENDING: 'amber', PENDING_APPROVAL: 'amber', FLAGGED: 'amber',
     PLAZA_UNMATCHED: 'amber', WARNING: 'amber', DUPLICATE: 'violet', AUTO_SUGGESTED: 'violet', OVERRIDDEN: 'violet', IGNORED: 'grey', REVERSED: 'grey',
-    OPEN: 'blue', IN_PROGRESS: 'blue', PREVIEWED: 'blue', PROCESSING: 'blue', QUEUED: 'blue', NEW: 'blue', IN_STOCK: 'blue', IN_GODOWN: 'blue',
+    OPEN: 'blue', IN_PROGRESS: 'blue', PREVIEWED: 'blue', PROCESSING: 'blue', QUEUED: 'blue', RUNNING: 'blue', SUCCESS: 'green', PARTIAL: 'amber', NEW: 'blue', IN_STOCK: 'blue', IN_GODOWN: 'blue',
     REMOVED: 'amber', SHIFTED: 'green', SENT_FOR_RETREADING: 'violet', RETREADED: 'sky', DAMAGED: 'red', WARRANTY: 'violet', UNDER_INSPECTION: 'amber',
     OVERPAID: 'violet', COMPLETED_WITH_ERRORS: 'amber', VEHICLE_MATCHED: 'sky', UNCLASSIFIED: 'grey', SKIPPED: 'grey', CR: 'green', DR: 'red'
   };

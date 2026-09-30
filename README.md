@@ -1,7 +1,9 @@
 # TRANS ERP — Transport & Logistics ERP (India)
 
 A modular, auditable ERP for an India-based transport and logistics company: fleet and cost centers, compliance and
-renewals, insurance, contracts and income, bank statement import and reconciliation, fuel, toll/FASTag, maintenance,
+renewals, insurance, contracts and income, bank statement import and reconciliation, fuel, toll/FASTag (with the toll
+plaza master fetched from the internet — OpenStreetMap, data.gov.in or a FASTag API; see
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)), maintenance,
 the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, alerts and approvals.
 
 * **Backend:** Python 3.11+, FastAPI (REST + OpenAPI), SQLAlchemy 2 ORM, Alembic migrations, service layer.
@@ -27,6 +29,7 @@ the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, 
 
 To re-enter the MySQL settings delete the `.env` file and run `run_app.bat` again.
 `daily_jobs.bat` runs the daily renewal/alert checks — schedule it once a day in Windows Task Scheduler.
+`toll_plazas_sync.bat` fetches / updates the toll plaza master from the internet — schedule it weekly.
 Linux/macOS: `./run_app.sh [port]` does the same.
 `python main.py` inside the `app` folder also works: it simply hands over to `run_app.bat` / `run_app.sh`.
 
@@ -59,7 +62,7 @@ Browser (HTML pages + erp.js / master.js)          API clients / provider feeds
 │   vehicles · renewals · bank · contracts · operations (fuel/toll) · maintenance  │
 │   tyres · import_engine + transforms · reports · dashboard · approvals ·         │
 │   documents · notifications · rules (configurable business rules)               │
-│ app/models/*   SQLAlchemy ORM (90 tables)          app/core/* security, audit,   │
+│ app/models/*   SQLAlchemy ORM (91 tables)          app/core/* security, audit,   │
 │                                                    utils (DD/MM/YYYY, decimals)  │
 └──────────────────────────────────────────┬──────────────────────────────────────┘
                                            ▼
@@ -146,6 +149,7 @@ The migration files that create every table in `ERP_LOGISTICS` are in [`migratio
 | `migrations/versions/0001_initial_schema.py` | Alembic migration: all 90 tables with primary keys, unique keys, indexes and foreign keys |
 | `migrations/sql/0001_initial_schema.sql` | the same schema as plain MySQL SQL, incl. `CREATE DATABASE ERP_LOGISTICS` |
 | `migrations/sql/0001_initial_schema_rollback.sql` | plain-SQL rollback (drops the tables — back up first) |
+| `migrations/versions/0002_toll_plaza_internet_sync.py` + `sql/0002_…sql` | toll plaza place / state-as-in-source, source key, and the `toll_plaza_sync_runs` table |
 
 **Option A — Alembic (recommended):**
 

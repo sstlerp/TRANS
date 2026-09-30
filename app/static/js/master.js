@@ -116,7 +116,8 @@ const Master = (() => {
       case 'datetime': ctl = `<input class="f-input" id="${id}" data-f="${f.name}" placeholder="DD/MM/YYYY HH:MM" inputmode="numeric" autocomplete="off"${ro}>`; break;
       case 'time': ctl = `<input class="f-input" type="time" id="${id}" data-f="${f.name}"${ro}>`; break;
       case 'password': ctl = `<input class="f-input" type="password" id="${id}" data-f="${f.name}" autocomplete="new-password"${ro}>`; break;
-      case 'json': ctl = `<pre class="f-input" id="${id}" data-f="${f.name}" style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:0"></pre>`; break;
+      case 'json': ctl = f.readonly ? `<pre class="f-input" id="${id}" data-f="${f.name}" style="white-space:pre-wrap;max-height:180px;overflow:auto;margin:0"></pre>`
+        : `<textarea class="f-input f-json" id="${id}" data-f="${f.name}" spellcheck="false" style="font-family:ui-monospace,Consolas,monospace;min-height:120px"></textarea>`; break;
       case 'int': case 'decimal': case 'money':
         ctl = `<input class="f-input" id="${id}" data-f="${f.name}" inputmode="decimal" style="text-align:right"${ro}>`; break;
       default: ctl = `<input class="f-input" id="${id}" data-f="${f.name}" maxlength="${f.maxlen || 255}"${ro}${f.upper ? ' style="text-transform:uppercase"' : ''}>`;
@@ -162,7 +163,7 @@ const Master = (() => {
     else if (f.type === 'date') el.value = ddmmyyyy(v);
     else if (f.type === 'datetime') el.value = ddmmyyyy(v) + (v && String(v).length > 10 && !/ \d\d:\d\d$/.test(ddmmyyyy(v)) ? ' ' + String(v).slice(11, 16) : '');
     else if (f.type === 'time') el.value = v ? String(v).slice(0, 5) : '';
-    else if (f.type === 'json') el.textContent = v ? JSON.stringify(v, null, 1) : '';
+    else if (f.type === 'json') { const t = v ? JSON.stringify(v, null, el.tagName === 'TEXTAREA' ? 2 : 1) : ''; if (el.tagName === 'TEXTAREA') el.value = t; else el.textContent = t; }
     else if (['select', 'lookup', 'fk', 'multi'].includes(f.type)) {
       if (f.type === 'fk' && v && !$$('option', el).some(o => o.value === String(v))) loadOptions(f, el, v, el.closest('form,.vnd-form-wrap,.m-body,tr') || document);
       else if (Array.isArray(v)) $$('option', el).forEach(o => o.selected = v.map(String).includes(o.value));

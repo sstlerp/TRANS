@@ -44,6 +44,28 @@ def upsert(db: Session, model, keys: dict, values: dict | None = None):
     return obj
 
 
+def seed_toll_sources(db: Session) -> None:
+    """Internet sources for the toll plaza master (inserted once; later edits in the UI are kept)."""
+    rows = [
+        {"code": "TOLL-OSM", "name": "OpenStreetMap (Overpass API) — toll plazas, free", "is_active": True,
+         "base_url": "https://overpass-api.de/api/interpreter", "auth_type": "NONE", "timeout_seconds": 180,
+         "settings": {"adapter": "OSM_OVERPASS", "place_radius_m": 10000, "pause_seconds": 2, "retries": 3,
+                      "name_fallback": False},
+         "remarks": "No key needed. Data © OpenStreetMap contributors (ODbL). Other mirror: https://overpass.kumi.systems/api/interpreter"},
+        {"code": "TOLL-DATAGOV", "name": "data.gov.in (Open Government Data) — toll plazas", "is_active": False,
+         "base_url": "https://api.data.gov.in/resource/{resource_id}", "auth_type": "API_KEY",
+         "credential_env_var": "ERP_DATA_GOV_IN_API_KEY", "timeout_seconds": 60,
+         "settings": {"adapter": "DATA_GOV_IN", "resource_id": "", "page_size": 500, "records_path": "records",
+                      "total_path": "total", "state_filter_field": "", "field_map": {}},
+         "remarks": "Get a free API key at data.gov.in, put it in ERP_DATA_GOV_IN_API_KEY, set settings.resource_id "
+                    "(the toll plaza dataset) and activate."},
+    ]
+    for r in rows:
+        if not db.execute(select(OP.ApiIntegration).where(OP.ApiIntegration.code == r["code"])).first():
+            db.add(OP.ApiIntegration(integration_type="TOLL_PLAZA_MASTER", **r))
+    db.flush()
+
+
 def seed_security(db: Session) -> None:
     perms = {}
     for m in MODULES:
@@ -122,6 +144,12 @@ def seed_reference(db: Session) -> None:
               ("AS", "Assam", "18"), ("UK", "Uttarakhand", "05"), ("HP", "Himachal Pradesh", "02"), ("JK", "Jammu and Kashmir", "01")]
     for c, n, g in states:
         upsert(db, O.State, {"code": c}, {"name": n, "gst_code": g})
+    from app.services.toll_sync import INDIA_STATES  # all states / UTs (toll plazas can be anywhere in India)
+    have = {st.name.lower() for st in db.execute(select(O.State)).scalars()} | {c for c, *_ in states}
+    for c, n, _iso, _alias, g in INDIA_STATES:
+        if c not in have and n.lower() not in have:
+            upsert(db, O.State, {"code": c}, {"name": n, "gst_code": g})
+    seed_toll_sources(db)
     tn = db.execute(select(O.State).where(O.State.code == "TN")).scalar_one()
     for d in ("Chennai", "Tiruvallur", "Kancheepuram", "Coimbatore", "Salem", "Madurai", "Tiruchirappalli", "Vellore",
               "Krishnagiri", "Namakkal"):
@@ -434,7 +462,9 @@ def seed_demo(db: Session) -> None:
     prov = {p.code: p.id for p in db.execute(select(O.Provider)).scalars()}
     for code, ext, name, hw in (("PLZ-SRIP", "5401", "Sriperumbudur Toll Plaza", "NH48"), ("PLZ-VANA", "5402", "Vanagaram Toll Plaza", "NH48"),
                                 ("PLZ-KRIS", "5403", "Krishnagiri Toll Plaza", "NH44"), ("PLZ-PARA", "5404", "Paranur Toll Plaza", "NH32")):
-        upsert(db, OP.TollPlaza, {"plaza_code": code}, {"external_plaza_id": ext, "name": name, "highway": hw, "state_id": st["TN"]})
+        place = name.replace(" Toll Plaza", "")
+        upsert(db, OP.TollPlaza, {"plaza_code": code}, {"external_plaza_id": ext, "name": name, "place": place, "highway": hw,
+                                                      "state_id": st["TN"], "state_name": "Tamil Nadu"})
     for code, name, pv in (("RO-1001", "IOCL COCO Guindy", "FUEL_IOCL"), ("RO-1002", "IOCL Maduravoyal", "FUEL_IOCL"),
                            ("BP-2001", "BPCL Poonamallee", "FUEL_BPCL"), ("BP-2002", "BPCL CNG Ambattur", "FUEL_BPCL")):
         upsert(db, OP.FuelStation, {"station_code": code}, {"name": name, "provider_id": prov[pv], "city": "Chennai",

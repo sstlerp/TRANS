@@ -1,4 +1,4 @@
--- TRANS ERP — database ERP_LOGISTICS — rollback of migration 0001 (DROPS ALL ERP TABLES AND DATA).
+-- TRANS ERP — database ERP_LOGISTICS — rollback of migration 0001 (initial schema — all ERP tables (organisation, fleet, compliance, finance, imports,)
 -- Generated with: alembic downgrade 0001:base --sql      Take a backup first (scripts/backup_mysql.sh).
 USE `ERP_LOGISTICS`;
 

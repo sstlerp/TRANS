@@ -75,6 +75,12 @@ flagged, not labelled fraud). Toll rows are matched to vehicles (mappings/FASTag
 Unmatched/flagged rows appear in **Toll Review** / fuel status filters — **Resolve** assigns the vehicle/plaza and can
 remember the mapping for future imports. Cost centers follow the vehicle as at the transaction date.
 
+**Toll plazas from the internet:** **Toll → Toll Plazas → Fetch from Internet** adds and updates plazas with
+**toll ID, toll plaza name, place and state** (all compulsory — records without them are skipped and listed).
+Choose the source (OpenStreetMap is free and ready; data.gov.in needs a free API key), tick the states (none = all of
+India) and optionally *Dry run* first. Every run is kept in **Toll → Toll Plaza Internet Sync**. Schedule
+`toll_plazas_sync.bat` weekly to keep the list current. Details: `docs/INTEGRATIONS.md`.
+
 ## 7. Maintenance
 
 Job cards with parts, labour and other costs (totals computed), odometer (validated), downtime, vendor/workshop,
