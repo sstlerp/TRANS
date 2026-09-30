@@ -26,6 +26,20 @@ What a sync does:
   states / UTs are seeded.
 * OpenStreetMap is read state by state: one state failing (e.g. a timeout) does not lose the others — the run ends
   **PARTIAL** and names the state; run it again for that state.
+* **Your corrections are kept.** When you change the name, place, state, district, highway, operator or position of
+  a fetched plaza, the plaza is marked **Keep My Changes**; later fetches leave its details alone and the run counts
+  it under *Your changes kept*. Untick **Keep My Changes** to let the source update it again.
+
+## Viewing and updating toll plazas
+
+| Screen | What you can do |
+|---|---|
+| **Toll → Toll Plaza Directory & Map** | Totals (from internet, entered by hand, changes kept, missing place / state, not on the map, last fetch), a state-wise count (click a state to filter), a map of every plaza with a position (blue = from internet, amber = entered by hand, violet = your changes kept), and a searchable list. Each plaza opens in Google Maps or in the register to view / update. |
+| **Toll → Toll Plazas** (register) | The entry form on top, the table below. Click a row to view and update any detail; the plaza's links show **Google Maps**, **Re-fetch *state* from internet** (only this plaza's state, from the same source) and the directory. Row menu ⋯ → **Audit history** shows every change, including what each fetch changed. Export to Excel / CSV / PDF. |
+| **Toll → Toll Plaza Internet Sync** | Every fetch run and its counts, errors and skipped records. |
+
+The map background is OpenStreetMap (`ERP_MAP_TILE_URL`, `ERP_MAP_ATTRIBUTION` change it to another XYZ tile
+server); the PC showing the map needs internet access to it. The list and counts work without it.
 
 ## Sources
 

@@ -1,0 +1,138 @@
+{% extends "base.html" %}
+{% block title %}Toll Plaza Directory · {{ brand_company_name }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="/static/vendor/leaflet/leaflet.css">{% endblock %}
+{% block content %}
+<div class="vnd-page">
+  <div class="vnd-toolbar">
+    <span class="vnd-toolbar-title"><i class="ti ti-map-2" style="margin-right:.3rem"></i> Toll Plaza Directory &amp; Map</span>
+    <div class="vnd-tb-right">
+      {% if user.has('toll.edit') %}<a class="tb-btn tb-btn--ghost" href="/masters/toll_plazas?fetch=1"><i class="ti ti-cloud-download"></i> Fetch from Internet</a>{% endif %}
+      <a class="tb-btn tb-btn--ghost" href="/masters/toll_plaza_sync_runs"><i class="ti ti-history"></i> Sync History</a>
+      <a class="tb-btn tb-btn--new" href="/masters/toll_plazas"><i class="ti ti-edit"></i> Plaza Register (add / update)</a>
+    </div>
+  </div>
+  <div class="vnd-body">
+    <div class="kpis" id="td-kpis" style="margin-bottom:.8rem"></div>
+    <div class="td-grid">
+      <div class="card">
+        <div class="card-h"><i class="ti ti-map-pins"></i> Plazas by state <a href="#" id="td-all">Show all</a></div>
+        <div class="card-b" style="padding:0"><div class="td-states"><table class="vnd-table"><thead><tr>
+          <th>State</th><th class="num">Plazas</th><th class="num">From internet</th><th class="num">Kept changes</th><th>Last fetched</th></tr></thead>
+          <tbody id="td-states"><tr><td colspan="5"><div class="tbl-empty">Loading…</div></td></tr></tbody></table></div></div>
+      </div>
+      <div class="card">
+        <div class="card-h"><i class="ti ti-map"></i> Map <span id="td-map-note" style="margin-left:auto;font:500 .62rem 'Plus Jakarta Sans',sans-serif;text-transform:none;letter-spacing:0;color:#64748B"></span></div>
+        <div class="card-b" style="padding:0"><div id="td-map"></div>
+          <div class="td-legend"><span><i style="background:#0284C7"></i> From internet</span><span><i style="background:#D97706"></i> Entered by hand</span>
+            <span><i style="background:#7C3AED"></i> Your changes kept</span></div></div>
+      </div>
+    </div>
+
+    <div class="vnd-list-wrap" style="margin-top:.8rem">
+      <div class="vnd-list-head">
+        <div class="search-wrap"><i class="ti ti-search" style="color:#94A3B8;font-size:.76rem"></i>
+          <input class="search-inp" id="td-q" placeholder="Search name, place, toll ID, plaza code, highway…"></div>
+        <span class="vnd-list-title" id="td-title">All toll plazas</span>
+        <div class="vnd-list-head-right">
+          <select class="f-input" id="td-source" style="width:auto;font-size:.66rem">
+            <option value="">All sources</option><option value="OSM_OVERPASS">OpenStreetMap</option><option value="DATA_GOV_IN">data.gov.in</option>
+            <option value="CUSTOM_JSON">Other API</option><option value="MANUAL">Entered by hand</option></select>
+          <span class="list-count" id="td-count"></span>
+        </div>
+      </div>
+      <div class="vnd-table-scroll"><table class="vnd-table"><thead><tr>
+        <th>Toll ID</th><th>Plaza Code</th><th>Toll Plaza Name</th><th>Place</th><th>State</th><th>Highway</th><th>Source</th><th>Last fetched</th>
+        <th style="text-align:right">Actions</th></tr></thead>
+        <tbody id="td-body"><tr><td colspan="9"><div class="tbl-empty">Loading…</div></td></tr></tbody></table></div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script src="/static/vendor/leaflet/leaflet.js"></script>
+<script>
+(() => {
+  const { $, $$, esc, get, ddmmyyyy, dt, errToast } = ERP;
+  const TILE = {{ map_tile_url|tojson }}, ATTR = {{ map_attribution|tojson }}, CAN_EDIT = {{ 'true' if user.has('toll.edit') else 'false' }};
+  const openUrl = p => `/masters/toll_plazas?id=${p.id}${CAN_EDIT ? '&edit=1' : ''}`;
+  const SRC = { OSM_OVERPASS: 'OpenStreetMap', DATA_GOV_IN: 'data.gov.in', CUSTOM_JSON: 'Other API' };
+  const colour = p => p.kept_changes ? '#7C3AED' : p.source ? '#0284C7' : '#D97706';
+  const gmaps = p => `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`;
+  const S = { state: null, stateName: '', q: '', source: '' };
+  let map = null, layer = null, markers = {}, rows = [];
+
+  const kpi = (l, v, cls = '', sub = '') => `<div class="kpi ${cls}"><div class="l">${l}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</div>`;
+
+  function initMap() {
+    if (typeof L === 'undefined') { $('#td-map').innerHTML = '<div class="tbl-empty">Map library not loaded</div>'; return; }
+    map = L.map('td-map', { zoomControl: true, attributionControl: true }).setView([22.5, 79], 5);
+    L.tileLayer(TILE, { maxZoom: 18, attribution: ATTR }).addTo(map);
+    layer = L.layerGroup().addTo(map);
+  }
+
+  async function loadSummary() {
+    const s = await get('/api/toll-plazas/summary');
+    $('#td-kpis').innerHTML = kpi('Toll plazas', s.total.toLocaleString('en-IN'), 'blue') +
+      kpi('From internet', s.from_internet.toLocaleString('en-IN'), 'green') + kpi('Entered by hand', s.entered_by_hand.toLocaleString('en-IN')) +
+      kpi('Your changes kept', s.kept_changes, s.kept_changes ? 'blue' : '') +
+      kpi('Missing place', s.missing_place, s.missing_place ? 'amber' : '') + kpi('Missing state', s.missing_state, s.missing_state ? 'amber' : '') +
+      kpi('Not on map', s.without_coordinates, '', 'no latitude / longitude') +
+      kpi('Last fetched', s.last_fetched ? ddmmyyyy(String(s.last_fetched).slice(0, 10)) : '—', '', s.last_fetched ? 'at ' + String(s.last_fetched).slice(11, 16) : 'never');
+    $('#td-states').innerHTML = s.by_state.length ? s.by_state.map(r => `<tr class="clickable" data-id="${r.state_id ?? ''}" data-name="${esc(r.name)}">
+        <td><b>${esc(r.name)}</b>${r.code ? ` <span style="color:#94A3B8">${esc(r.code)}</span>` : ''}</td><td class="num">${r.total}</td>
+        <td class="num">${r.from_internet}</td><td class="num">${r.kept_changes || ''}</td><td>${r.last_fetched ? ddmmyyyy(r.last_fetched) : '—'}</td></tr>`).join('')
+      : '<tr><td colspan="5"><div class="tbl-empty"><i class="ti ti-road-off"></i>No toll plazas yet — use Fetch from Internet</div></td></tr>';
+    $$('#td-states tr.clickable').forEach(tr => tr.onclick = () => {
+      if (!tr.dataset.id) return;
+      S.state = +tr.dataset.id; S.stateName = tr.dataset.name;
+      $$('#td-states tr').forEach(x => x.classList.toggle('selected', x === tr));
+      loadPlazas(true);
+    });
+  }
+
+  async function loadPlazas(fit) {
+    rows = await get('/api/toll-plazas/map', ERP.clean({ state_id: S.state, q: S.q, source: S.source }));
+    $('#td-title').textContent = S.stateName ? `Toll plazas — ${S.stateName}` : 'All toll plazas';
+    $('#td-count').textContent = `${rows.length.toLocaleString('en-IN')} plaza(s)${rows.length >= 5000 ? ' (first 5,000)' : ''}`;
+    $('#td-body').innerHTML = rows.length ? rows.map(p => `<tr data-id="${p.id}">
+        <td>${esc(p.toll_id || '—')}</td><td>${esc(p.plaza_code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.place || '—')}</td>
+        <td>${esc(p.state || '—')}</td><td>${esc(p.highway || '')}</td>
+        <td>${p.source ? `<span class="pill pill-sky">${esc(SRC[p.source] || p.source)}</span>` : '<span class="pill pill-amber">By hand</span>'}
+          ${p.kept_changes ? '<span class="pill pill-violet" title="Your changes are kept; the internet fetch does not overwrite them">Kept</span>' : ''}</td>
+        <td>${p.last_fetched ? dt(p.last_fetched) : '—'}</td>
+        <td style="text-align:right;white-space:nowrap">
+          ${p.lat !== null ? `<button class="ra-btn ra-act" data-show="${p.id}" title="Show on the map"><i class="ti ti-map-pin"></i></button>
+            <a class="ra-btn ra-edit" href="${gmaps(p)}" target="_blank" rel="noopener" title="Open in Google Maps"><i class="ti ti-brand-google-maps"></i></a>` : ''}
+          <a class="ra-btn ra-edit" href="${openUrl(p)}" title="View / update details"><i class="ti ti-edit"></i> View / Update</a></td></tr>`).join('')
+      : '<tr><td colspan="9"><div class="tbl-empty"><i class="ti ti-database-off"></i>No toll plazas match</div></td></tr>';
+    $$('[data-show]').forEach(b => b.onclick = () => { const m = markers[b.dataset.show]; if (m) { map.setView(m.getLatLng(), 13); m.openPopup(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
+    drawMap(fit);
+  }
+
+  function drawMap(fit) {
+    if (!map) return;
+    layer.clearLayers(); markers = {};
+    const pts = [];
+    for (const p of rows) {
+      if (p.lat === null || p.lon === null) continue;
+      const m = L.circleMarker([p.lat, p.lon], { radius: 6, color: '#fff', weight: 1.5, fillColor: colour(p), fillOpacity: .95 })
+        .bindPopup(`<div class="td-pop"><b>${esc(p.name)}</b><br><span>Toll ID</span> ${esc(p.toll_id || '—')}<br><span>Place</span> ${esc(p.place || '—')}<br>
+          <span>State</span> ${esc(p.state || '—')}${p.highway ? `<br><span>Highway</span> ${esc(p.highway)}` : ''}<br>
+          <a href="${openUrl(p)}">View / update</a> · <a href="${gmaps(p)}" target="_blank" rel="noopener">Google Maps</a></div>`);
+      m.addTo(layer); markers[p.id] = m; pts.push([p.lat, p.lon]);
+    }
+    const off = rows.length - pts.length;
+    $('#td-map-note').textContent = `${pts.length} on the map${off ? ` · ${off} without position` : ''}`;
+    if (fit && pts.length) map.fitBounds(pts, { padding: [24, 24], maxZoom: 12 });
+  }
+
+  let t;
+  $('#td-q').oninput = e => { clearTimeout(t); t = setTimeout(() => { S.q = e.target.value; loadPlazas(true).catch(errToast); }, 300); };
+  $('#td-source').onchange = e => { S.source = e.target.value; loadPlazas(true).catch(errToast); };
+  $('#td-all').onclick = e => { e.preventDefault(); S.state = null; S.stateName = ''; $$('#td-states tr').forEach(x => x.classList.remove('selected'));
+    loadPlazas(true).catch(errToast); };
+  initMap();
+  Promise.all([loadSummary(), loadPlazas(true)]).catch(errToast);
+})();
+</script>
+{% endblock %}

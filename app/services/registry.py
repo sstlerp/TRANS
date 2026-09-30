@@ -856,6 +856,24 @@ register(MasterSpec("fuel_transactions", OP.FuelTransaction, "Fuel Transactions"
     status_field="status", documents=True, can_delete=False, branch_via_vehicle="vehicle_id"))
 
 # ═════════════════════════════ TOLL ═════════════════════════════
+_SYNCED_PLAZA_FIELDS = ("name", "place", "state_id", "district_id", "highway", "latitude", "longitude", "operator")
+
+
+def _toll_plaza_before_save(ctx, obj, data, is_new):
+    """Editing the details of a plaza fetched from the internet locks it, so the next fetch keeps the user's values
+    (untick "Keep My Changes" to let the internet source update it again)."""
+    from sqlalchemy import inspect as sa_inspect
+    if is_new or not obj.api_source or obj.details_locked:
+        return
+    st = sa_inspect(obj)
+    if st.attrs.details_locked.history.deleted:  # the user just unticked it
+        return
+    if any(st.attrs[k].history.has_changes() for k in _SYNCED_PLAZA_FIELDS):
+        obj.details_locked = True
+        ctx.warnings.append("Your changes are kept: the internet fetch will no longer overwrite this plaza "
+                            "(untick “Keep My Changes” to allow it again).")
+
+
 register(MasterSpec("toll_plazas", OP.TollPlaza, "Toll Plazas", "toll", "ti-road", [
     F("plaza_code", "Plaza Code", required=True, upper=True, maxlen=40, list=True, search=True, section="Plaza"),
     F("external_plaza_id", "Toll ID (source)", maxlen=40, list=True, search=True, section="Plaza",
@@ -869,8 +887,11 @@ register(MasterSpec("toll_plazas", OP.TollPlaza, "Toll Plazas", "toll", "ti-road
     F("operator", "Operator", maxlen=150, section="Source"), F("provider_id", "Provider", type="fk", fk="providers", section="Source"),
     F("api_source", "Fetched From", maxlen=60, list=True, filter=True, readonly=True, section="Source"),
     F("state_name", "State (as in source)", maxlen=100, readonly=True, section="Source"),
-    F("api_last_synced_at", "Last Fetched", type="datetime", readonly=True, list=True, section="Source")],
-    code_field="plaza_code", label_fields=("plaza_code", "name"), group="Toll",
+    F("api_last_synced_at", "Last Fetched", type="datetime", readonly=True, list=True, section="Source"),
+    F("details_locked", "Keep My Changes", type="bool", list=True, filter=True, section="Source",
+      hint="internet fetch will not overwrite; set automatically when you edit a fetched plaza")],
+    code_field="plaza_code", label_fields=("plaza_code", "name"), group="Toll", before_save=_toll_plaza_before_save,
+    subtitle_fields=("place", "state_id"),
     description="Use “Fetch from Internet” to add / update plazas from OpenStreetMap, data.gov.in or a FASTag API. "
                 "Toll ID, name, place and state are compulsory."))
 
@@ -885,6 +906,7 @@ register(MasterSpec("toll_plaza_sync_runs", OP.TollPlazaSyncRun, "Toll Plaza Int
     F("fetched", "Fetched", type="int", list=True, readonly=True), F("created", "Created", type="int", list=True, readonly=True),
     F("updated", "Updated", type="int", list=True, readonly=True), F("unchanged", "Unchanged", type="int", list=True, readonly=True),
     F("skipped", "Skipped", type="int", list=True, readonly=True),
+    F("locked", "Kept (your changes)", type="int", list=True, readonly=True),
     F("finished_at", "Finished", type="datetime", list=True, readonly=True),
     F("triggered_by", "By", type="fk", fk="users", readonly=True),
     F("error_message", "Errors", type="textarea", readonly=True, span=3),
@@ -1365,7 +1387,8 @@ def menu() -> list[tuple[str, list[tuple[str, str, str, str]]]]:
                   ("Fuel Imports", "/imports?type=FUEL", "ti-file-import", "import.view"),
                   ("Fuel Reports", "/reports?r=fuel_efficiency", "ti-chart-line", "report.view")]),
         ("Toll", [("Toll Providers", "/masters/providers?f_provider_type=TOLL", "ti-plug", "master.view"),
-                  m("toll_plazas"), m("toll_plaza_sync_runs", "Toll Plaza Internet Sync"),
+                  m("toll_plazas"), ("Toll Plaza Directory & Map", "/toll/plazas/directory", "ti-map-2", "toll.view"),
+                  m("toll_plaza_sync_runs", "Toll Plaza Internet Sync"),
                   m("toll_vehicle_mappings"), m("toll_transactions"),
                   ("Toll Review (unmatched)", "/masters/toll_transactions?f_status=VEHICLE_UNMATCHED,PLAZA_UNMATCHED,VEHICLE_MATCHED",
                    "ti-alert-circle", "toll.view"),
@@ -1424,6 +1447,7 @@ ITEM_DESC = {
     "/imports": "Upload an Excel/CSV statement, map columns, preview and import.",
     "/tyres/dashboard": "Axle-wise view of fitted tyres with tread and history.",
     "/reports": "All reports with Excel, CSV, PDF export and print.",
+    "/toll/plazas/directory": "State-wise count of toll plazas, search and map; open any plaza to view or update it.",
 }
 
 

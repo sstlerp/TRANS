@@ -520,11 +520,17 @@ def apply_records(db, integ: ApiIntegration, source: str, batch: StateBatch, run
                 audit(db, None, "CREATE", "toll_plazas", p.id, None, {"source": source, "toll_id": tid, **values},
                       reason=f"Fetched from {integ.code}")
             continue
-        changes = {k: v for k, v in values.items() if getattr(p, k) != v}
-        if p.external_plaza_id != tid:
-            changes["external_plaza_id"] = tid
-        if p.api_source != source:
-            changes["api_source"] = source
+        value_changes = {k: v for k, v in values.items() if getattr(p, k) != v}
+        link = {k: v for k, v in (("external_plaza_id", tid), ("api_source", source)) if getattr(p, k) != v}
+        if p.details_locked and value_changes:
+            # the user corrected this plaza by hand: keep their details, only record that the source differs
+            run.locked += 1
+            if not resolver.dry_run:
+                for k, v in link.items():
+                    setattr(p, k, v)
+                p.api_last_synced_at = now()
+            continue
+        changes = {**value_changes, **link}
         if not changes:
             run.unchanged += 1
             if not resolver.dry_run:

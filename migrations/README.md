@@ -6,8 +6,9 @@
 | `env.py` | Reads `ERP_DATABASE_URL` (default database `ERP_LOGISTICS`). In online mode it runs `CREATE DATABASE IF NOT EXISTS ERP_LOGISTICS CHARACTER SET utf8mb4` before migrating. |
 | `versions/0002_toll_plaza_internet_sync.py` | Revision `0002`: `toll_plazas.place` and `state_name`, unique key (`api_source`, `external_plaza_id`), new table `toll_plaza_sync_runs` (toll plaza fetches from the internet — see `docs/INTEGRATIONS.md`). |
 | `sql/0001_initial_schema.sql` | Plain MySQL script: `CREATE DATABASE ERP_LOGISTICS`, all tables, and the `alembic_version` row `0001`. |
-| `sql/0002_toll_plaza_internet_sync.sql` | Plain MySQL script for revision `0002` (run after 0001). |
-| `sql/000N_…_rollback.sql` | Plain MySQL rollback of each revision (0002 first, then 0001 — 0001 drops all ERP tables). |
+| `versions/0003_toll_plaza_keep_manual_changes.py` | Revision `0003`: `toll_plazas.details_locked` (user corrections are kept by later internet fetches) and `toll_plaza_sync_runs.locked` (count of such plazas per run). |
+| `sql/0002_toll_plaza_internet_sync.sql`, `sql/0003_toll_plaza_keep_manual_changes.sql` | Plain MySQL scripts for revisions `0002` and `0003` (run in order after 0001). |
+| `sql/000N_…_rollback.sql` | Plain MySQL rollback of each revision (newest first — 0001 drops all ERP tables). |
 
 ## Create the schema
 
@@ -17,6 +18,7 @@ alembic upgrade head
 # B) plain SQL — every file in order
 mysql -u root -p < migrations/sql/0001_initial_schema.sql
 mysql -u root -p < migrations/sql/0002_toll_plaza_internet_sync.sql
+mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
 # then reference data (permissions, roles, admin, lookups, rules, templates …)
 python -m app.seed            # add --demo for sample fleet data
 ```

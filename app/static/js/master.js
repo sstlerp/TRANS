@@ -18,7 +18,7 @@ const Master = (() => {
     const url = new URLSearchParams(location.search);
     for (const [k, v] of url.entries()) {
       if (k.startsWith('f_')) S.filters[k.slice(2)] = v;
-      else if (!['page', 'q'].includes(k)) S.extra[k] = v;
+      else if (!['page', 'q', 'id', 'edit', 'fetch'].includes(k)) S.extra[k] = v;
     }
     if (url.get('q')) S.q = url.get('q');
     renderToolbar();
@@ -26,7 +26,7 @@ const Master = (() => {
     await renderListShell();
     await loadList();
     const open = url.get('id');
-    if (open) view(+open);
+    if (open) view(+open, url.get('edit') === '1' && M.perms.edit ? 'EDIT' : 'VIEW');
     else if (M.perms.create) doNew(false);
     else setMode('LIST');
   }

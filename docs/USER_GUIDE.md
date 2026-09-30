@@ -81,6 +81,12 @@ Choose the source (OpenStreetMap is free and ready; data.gov.in needs a free API
 India) and optionally *Dry run* first. Every run is kept in **Toll → Toll Plaza Internet Sync**. Schedule
 `toll_plazas_sync.bat` weekly to keep the list current. Details: `docs/INTEGRATIONS.md`.
 
+**Viewing and updating toll plazas:** **Toll → Toll Plaza Directory & Map** shows the totals, a state-wise count and
+a map; search or click a state, then **View / Update** opens the plaza in the register. In **Toll → Toll Plazas**
+click any row to change its details and press **Update**. Changing a fetched plaza ticks **Keep My Changes**, so
+later internet fetches do not overwrite your correction (untick it to allow updates again). Each plaza also links to
+Google Maps and can re-fetch its own state; ⋯ → **Audit history** shows every change.
+
 ## 7. Maintenance
 
 Job cards with parts, labour and other costs (totals computed), odometer (validated), downtime, vendor/workshop,

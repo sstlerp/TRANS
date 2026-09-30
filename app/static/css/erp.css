@@ -283,6 +283,22 @@ select.f-input[multiple]{background-image:none;min-height:90px;padding-right:.38
   border:1px solid #E2E8F0;border-radius:6px;padding:.4rem .6rem;background:#F8FAFC;font-size:.74rem}
 .ts-states label{display:flex;align-items:center;gap:.35rem;cursor:pointer}
 
+.tp-links{display:flex;gap:.8rem;flex-shrink:0;font:600 .68rem 'Plus Jakarta Sans',sans-serif}
+.tp-links a{text-decoration:none;display:inline-flex;align-items:center;gap:.2rem;color:#0369A1}
+.tp-links a:hover{text-decoration:underline}
+
+/* toll plaza directory & map */
+.td-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.45fr);gap:.8rem;align-items:stretch}
+@media(max-width:1000px){.td-grid{grid-template-columns:1fr}}
+.td-states{max-height:480px;overflow:auto}
+.td-states tr.clickable{cursor:pointer}
+.td-states tr.selected td{background:rgba(14,165,233,.1)}
+#td-map{height:450px;background:#E2E8F0}
+.td-legend{display:flex;gap:1rem;padding:.35rem .75rem;font-size:.66rem;color:#475569;border-top:1px solid #E2E8F0}
+.td-legend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:.3rem;vertical-align:-1px}
+.td-pop{font:500 .74rem 'Plus Jakarta Sans',sans-serif;line-height:1.5}
+.td-pop span{color:#64748B;font-size:.66rem;text-transform:uppercase;letter-spacing:.04em}
+
 /* ── child grid ── */
 .child-wrap{overflow-x:auto}
 .child-tbl{width:100%;border-collapse:collapse;font-size:.72rem}

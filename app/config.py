@@ -61,6 +61,9 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
 
     timezone: str = "Asia/Kolkata"
+    # map background for the Toll Plaza Directory (OpenStreetMap standard tiles; any XYZ tile server can be used)
+    map_tile_url: str = "https://tile.openstreetmap.org/{z}/{x}/{y}.png"
+    map_attribution: str = "© OpenStreetMap contributors"
     date_display_format: str = "%d/%m/%Y"
 
     storage_dir: Path = BASE_DIR / "storage"

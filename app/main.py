@@ -50,6 +50,14 @@ templates = Jinja2Templates(directory=str(BASE / "templates"))
 templates.env.filters["ddmmyyyy"] = fmt_date
 
 
+def map_tile_origin() -> str:
+    """Origin of the map tile server (Toll Plaza Directory map), allowed as an image source."""
+    from urllib.parse import urlsplit
+    u = urlsplit(get_settings().map_tile_url.replace("{s}", "a"))
+    host = u.netloc.split(".", 1)[1] if u.netloc.count(".") >= 2 else u.netloc
+    return f"{u.scheme}://{u.netloc} {u.scheme}://*.{host}" if u.netloc else ""
+
+
 class SecurityHeaders(BaseHTTPMiddleware):
     """Security headers + last-resort error handler (no stack traces to users)."""
 
@@ -67,7 +75,8 @@ class SecurityHeaders(BaseHTTPMiddleware):
             "Content-Security-Policy",
             "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; "
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdn.jsdelivr.net; "
-            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; img-src 'self' data: blob:; "
+            "font-src 'self' https://fonts.gstatic.com https://cdn.jsdelivr.net data:; "
+            f"img-src 'self' data: blob: {map_tile_origin()}; "
             "connect-src 'self'")
         return resp
 
@@ -170,6 +179,9 @@ def _pages(app: FastAPI) -> None:
     app.get("/compliance", response_class=HTMLResponse, include_in_schema=False)(
         _page("pages/compliance.html", "compliance.view"))
     app.get("/reports", response_class=HTMLResponse, include_in_schema=False)(_page("pages/reports.html", "report.view"))
+    app.get("/toll/plazas/directory", response_class=HTMLResponse, include_in_schema=False)(
+        _page("pages/toll_directory.html", "toll.view", map_tile_url=get_settings().map_tile_url,
+              map_attribution=get_settings().map_attribution))
 
     @app.get("/imports/batches/{bid}", response_class=HTMLResponse, include_in_schema=False)
     def batch_page(bid: int, request: Request, user: CurrentUser | None = Depends(get_current_user_optional)):

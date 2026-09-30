@@ -221,3 +221,49 @@ def test_integration_settings_json_is_validated(client):
     body["settings"] = '{"adapter": "OSM_OVERPASS"}'
     r = client.post("/api/masters/api_integrations", json=body, headers=h)
     assert r.status_code == 200 and r.json()["settings"] == {"adapter": "OSM_OVERPASS"}
+
+
+def test_user_edits_are_kept_by_later_fetches(client, db, fake_osm):
+    """Editing a fetched plaza locks it; the next fetch keeps the user's values until the lock is removed."""
+    h = {"Authorization": "Bearer " + login(client)["access_token"]}
+    assert client.post("/api/toll-plazas/sync", json={"states": ["KA"], "wait": True}, headers=h).json()["created"] == 1
+    p = db.execute(select(TollPlaza).where(TollPlaza.external_plaza_id == "OSM-N301")).scalar_one()
+    assert p.details_locked is False
+    r = client.put(f"/api/masters/toll_plazas/{p.id}", json={"place": "Electronic City"}, headers=h)
+    assert r.status_code == 200 and r.json()["details_locked"] is True
+    assert any("kept" in w for w in r.json()["_warnings"])
+    run = client.post("/api/toll-plazas/sync", json={"states": ["KA"], "wait": True}, headers=h).json()
+    assert (run["locked"], run["updated"]) == (1, 0)
+    db.refresh(p)
+    assert p.place == "Electronic City"
+    # unticking "Keep My Changes" lets the internet source update it again
+    r = client.put(f"/api/masters/toll_plazas/{p.id}", json={"details_locked": False}, headers=h)
+    assert r.json()["details_locked"] is False
+    run = client.post("/api/toll-plazas/sync", json={"states": ["KA"], "wait": True}, headers=h).json()
+    assert (run["locked"], run["updated"]) == (0, 1)
+    db.refresh(p)
+    assert p.place == "Bengaluru"
+    # plazas keyed in by hand are never locked automatically
+    tn = db.execute(select(State.id).where(State.code == "TN")).scalar_one()
+    m = client.post("/api/masters/toll_plazas", json={"plaza_code": "PLZ-M", "name": "Manual Plaza", "place": "Hosur",
+                                                      "state_id": tn}, headers=h).json()
+    assert client.put(f"/api/masters/toll_plazas/{m['id']}", json={"place": "Hosur Bypass"}, headers=h).json()["details_locked"] is False
+
+
+def test_directory_summary_and_map(client, db, fake_osm):
+    h = {"Authorization": "Bearer " + login(client)["access_token"]}
+    client.post("/api/toll-plazas/sync", json={"states": ["TN", "KA"], "wait": True}, headers=h)
+    s = client.get("/api/toll-plazas/summary", headers=h).json()
+    assert s["total"] >= 3 and s["from_internet"] == 3 and s["total"] == s["from_internet"] + s["entered_by_hand"]
+    ka = next(r for r in s["by_state"] if r["code"] == "KA")
+    assert (ka["total"], ka["from_internet"], ka["name"]) == (1, 1, "Karnataka")
+    pts = client.get(f"/api/toll-plazas/map?state_id={ka['state_id']}", headers=h).json()
+    assert [(p["toll_id"], p["name"], p["place"], p["state"], p["lat"]) for p in pts] == \
+        [("OSM-N301", "Electronic City Toll Plaza", "Bengaluru", "Karnataka", 13.0)]
+    assert [p["toll_id"] for p in client.get("/api/toll-plazas/map?q=sriperumbudur", headers=h).json()] == ["OSM-W202"]
+    manual = client.get("/api/toll-plazas/map?source=MANUAL", headers=h).json()
+    assert all(p["source"] is None for p in manual)
+    client.cookies.set("erp_session", login(client)["access_token"])
+    page = client.get("/toll/plazas/directory")
+    assert page.status_code == 200 and "td-map" in page.text and "tile.openstreetmap.org" in page.headers["content-security-policy"]
+    assert 'href="/toll/plazas/directory"' in client.get("/m/toll").text

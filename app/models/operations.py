@@ -96,6 +96,8 @@ class TollPlaza(Base, MasterBase):
     road: Mapped[str | None] = mapped_column(String(150))
     state_id: Mapped[int | None] = fk("states.id")
     state_name: Mapped[str | None] = mapped_column(String(100))  # state as given by the source
+    # set when a user edits a fetched plaza: internet syncs then leave its details alone
+    details_locked: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
     district_id: Mapped[int | None] = fk("districts.id")
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7))
@@ -122,6 +124,7 @@ class TollPlazaSyncRun(Base, PKMixin):
     updated: Mapped[int] = mapped_column(Integer, default=0)
     unchanged: Mapped[int] = mapped_column(Integer, default=0)
     skipped: Mapped[int] = mapped_column(Integer, default=0)
+    locked: Mapped[int] = mapped_column(Integer, default=0, server_default="0")  # differed, kept (user's changes)
     skipped_samples: Mapped[list | None] = mapped_column(JSON)  # first reasons, for review
     error_message: Mapped[str | None] = mapped_column(Text)
     triggered_by: Mapped[int | None] = fk("users.id")

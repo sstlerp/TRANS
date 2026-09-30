@@ -569,6 +569,64 @@ def toll_sync_run(run_id: int, ctx: Ctx = Depends(ctx_dep)):
     return run_to_dict(run)
 
 
+@router.get("/toll-plazas/summary")
+def toll_plaza_summary(ctx: Ctx = Depends(ctx_dep)):
+    """Directory view: totals and a state-wise count of active toll plazas."""
+    ctx.user.require("toll.view")
+    from sqlalchemy import case
+    from app.models.operations import TollPlaza
+    from app.models.org import State
+    live = (TollPlaza.deleted_at.is_(None), TollPlaza.is_active.is_(True))
+    n = lambda cond: func.coalesce(func.sum(case((cond, 1), else_=0)), 0)  # noqa: E731
+    tot = ctx.db.execute(select(
+        func.count(TollPlaza.id), n(TollPlaza.api_source.is_not(None)), n(TollPlaza.details_locked.is_(True)),
+        n(TollPlaza.place.is_(None) | (TollPlaza.place == "")), n(TollPlaza.state_id.is_(None)),
+        n(TollPlaza.latitude.is_(None) | TollPlaza.longitude.is_(None)), func.max(TollPlaza.api_last_synced_at),
+    ).where(*live)).one()
+    rows = ctx.db.execute(
+        select(State.id, State.code, State.name, func.count(TollPlaza.id), n(TollPlaza.api_source.is_not(None)),
+               n(TollPlaza.details_locked.is_(True)), func.max(TollPlaza.api_last_synced_at))
+        .join(State, State.id == TollPlaza.state_id, isouter=True).where(*live)
+        .group_by(State.id, State.code, State.name).order_by(func.count(TollPlaza.id).desc())).all()
+    return {"total": tot[0], "from_internet": int(tot[1]), "entered_by_hand": tot[0] - int(tot[1]),
+            "kept_changes": int(tot[2]), "missing_place": int(tot[3]), "missing_state": int(tot[4]),
+            "without_coordinates": int(tot[5]), "last_fetched": jsonable(tot[6]),
+            "by_state": [{"state_id": r[0], "code": r[1], "name": r[2] or "(no state)", "total": r[3],
+                          "from_internet": int(r[4]), "kept_changes": int(r[5]), "last_fetched": jsonable(r[6])}
+                         for r in rows]}
+
+
+@router.get("/toll-plazas/map")
+def toll_plaza_map(state_id: int | None = None, q: str | None = None, source: str | None = None,
+                   ctx: Ctx = Depends(ctx_dep)):
+    """Active toll plazas for the directory list and map (up to 5,000)."""
+    ctx.user.require("toll.view")
+    from sqlalchemy import or_ as _or
+    from app.models.operations import TollPlaza
+    from app.models.org import State
+    stmt = (select(TollPlaza, State.code, State.name).join(State, State.id == TollPlaza.state_id, isouter=True)
+            .where(TollPlaza.deleted_at.is_(None), TollPlaza.is_active.is_(True)))
+    if state_id:
+        stmt = stmt.where(TollPlaza.state_id == state_id)
+    if source == "MANUAL":
+        stmt = stmt.where(TollPlaza.api_source.is_(None))
+    elif source:
+        stmt = stmt.where(TollPlaza.api_source == source)
+    if q and q.strip():
+        like = f"%{q.strip()}%"
+        stmt = stmt.where(_or(TollPlaza.name.ilike(like), TollPlaza.place.ilike(like), TollPlaza.plaza_code.ilike(like),
+                              TollPlaza.external_plaza_id.ilike(like), TollPlaza.highway.ilike(like)))
+    out = []
+    for p, scode, sname in ctx.db.execute(stmt.order_by(TollPlaza.name).limit(5000)):
+        out.append({"id": p.id, "plaza_code": p.plaza_code, "toll_id": p.external_plaza_id, "name": p.name,
+                    "place": p.place, "state_code": scode, "state": sname or p.state_name, "highway": p.highway,
+                    "lat": float(p.latitude) if p.latitude is not None else None,
+                    "lon": float(p.longitude) if p.longitude is not None else None,
+                    "source": p.api_source, "kept_changes": bool(p.details_locked),
+                    "last_fetched": jsonable(p.api_last_synced_at)})
+    return out
+
+
 # ───────────────────────── global search ─────────────────────────
 _SEARCH = [("vehicles", "Vehicle", ("registration_number", "vehicle_code", "fleet_number", "chassis_number"), "fleet.view"),
            ("drivers", "Driver", ("name", "driver_code", "license_number"), "driver.view"),

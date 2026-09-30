@@ -14,14 +14,33 @@ MasterExt.toll_plazas = (() => {
     b.innerHTML = '<i class="ti ti-cloud-download"></i> Fetch from Internet';
     b.onclick = () => open(a);
     $('#tb-right').prepend(b);
+    if (new URLSearchParams(location.search).get('fetch') === '1') setTimeout(() => open(a), 300);  // from the directory
+  }
+
+  // Record shortcuts next to the form title: Google Maps, re-fetch this plaza's state, directory
+  function onLoad(a, rec) {
+    let box = $('#tp-links');
+    if (!box) {
+      box = document.createElement('span'); box.id = 'tp-links'; box.className = 'tp-links';
+      $('#fb-hint').after(box);
+    }
+    if (!rec) { box.innerHTML = '<a href="/toll/plazas/directory"><i class="ti ti-map-2"></i> Directory &amp; map</a>'; return; }
+    const lat = rec.latitude, lon = rec.longitude;
+    const stateCode = String(rec.state_id__label || '').split(' — ')[0];
+    box.innerHTML = (lat != null && lon != null ? `<a href="https://www.google.com/maps/search/?api=1&query=${lat},${lon}" target="_blank" rel="noopener">
+        <i class="ti ti-brand-google-maps"></i> Google Maps</a>` : '') +
+      (rec.api_source && a.M.perms.edit && stateCode ? `<a href="#" id="tp-refresh"><i class="ti ti-refresh"></i> Re-fetch ${esc(stateCode)} from internet</a>` : '') +
+      '<a href="/toll/plazas/directory"><i class="ti ti-map-2"></i> Directory &amp; map</a>';
+    const r = $('#tp-refresh');
+    if (r) r.onclick = e => { e.preventDefault(); open(a, { state: stateCode, adapter: rec.api_source }); };
   }
 
   const counts = r => `<div class="kpis" style="margin:.5rem 0">
       ${[['Fetched', r.fetched, ''], ['New', r.created, 'green'], ['Updated', r.updated, 'blue'], ['Unchanged', r.unchanged, ''],
-         ['Skipped', r.skipped, r.skipped ? 'amber' : '']].map(([l, v, c]) => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v ?? 0}</div></div>`).join('')}
+         ['Your changes kept', r.locked, r.locked ? 'blue' : ''], ['Skipped', r.skipped, r.skipped ? 'amber' : '']].map(([l, v, c]) => `<div class="kpi ${c}"><div class="l">${l}</div><div class="v">${v ?? 0}</div></div>`).join('')}
     </div>`;
 
-  async function open(a) {
+  async function open(a, preset = {}) {
     let sources, states;
     try { [sources, states] = await Promise.all([get('/api/toll-plazas/sync/sources'), get('/api/toll-plazas/sync/states')]); }
     catch (e) { return errToast(e); }
@@ -50,7 +69,9 @@ MasterExt.toll_plazas = (() => {
         s.needs_key ? `Needs the API key in environment variable ${s.key_env_var || '(set Credential Env Variable)'}.` : '';
     };
     $('#ts-source', m.el).onchange = note;
-    const firstActive = sources.find(s => s.is_active); if (firstActive) $('#ts-source', m.el).value = firstActive.id;
+    const pick = sources.find(s => s.is_active && preset.adapter && s.adapter === preset.adapter) || sources.find(s => s.is_active);
+    if (pick) $('#ts-source', m.el).value = pick.id;
+    if (preset.state) { const c = $(`.ts-states input[value="${preset.state}"]`, m.el); if (c) c.checked = true; }
     note();
     $('#ts-none', m.el).onclick = e => { e.preventDefault(); $$('.ts-states input', m.el).forEach(c => c.checked = false); };
     m.el.querySelector('[data-x]').onclick = m.close;
@@ -86,5 +107,5 @@ MasterExt.toll_plazas = (() => {
       </div></div>`;
     }
   }
-  return { afterForm };
+  return { afterForm, onLoad };
 })();
