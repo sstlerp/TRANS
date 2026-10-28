@@ -6,12 +6,14 @@ click a screen card to open it. The header always has **Main Dashboard**, a butt
 change password and **Sign out**. Quick search (vehicle, driver, tyre, invoice, UTR …) is on the Main Dashboard.
 The executive dashboard is under **Dashboard → Executive Dashboard**.
 
-**Data-entry screens:** the upper part is the entry form and the lower part is the table of records for that form.
-A blank form is ready when the screen opens — fill it and press **Save**; the form clears for the next entry and the
-new row is highlighted in the table. Click any row to load it into the form, change it and press **Update** (or
-**Cancel**). The summary bar (VSB) above the form shows the open record's status and quick actions. The ⌃ button
-hides the form when you only want to browse. The table has search (partial or *exact*), filters, date range, sorting
-(click headers), pagination and Excel/CSV/PDF/print.
+**Data-entry screens (same layout as SSTL-ERP):** a dark toolbar with the screen title and **New / Edit / Save /
+Cancel**; below it the summary bar (mode, record ID, name, status, quick actions — ⌄ shows the full record summary);
+then the entry form — the first section across the full width, the other sections two per row — and the table of
+records at the bottom. The app header, toolbar, summary bar and the table's search bar stay pinned while you scroll,
+and table column headings stay visible inside the table. A blank form is ready when the screen opens — fill it and
+press **Save**; the form clears for the next entry and the new row is highlighted. Click any row to load it into the
+form, change it and press **Update** (or **Cancel**). The table has search (partial or *exact*), filters, date range,
+sorting (click headers), pagination and Excel/CSV/PDF/print.
 Row menu (⋯): actions, **Documents**, **Audit history**, activate/deactivate, delete (soft). Dates are typed and shown
 as **DD/MM/YYYY** (time as HH:MM).
 

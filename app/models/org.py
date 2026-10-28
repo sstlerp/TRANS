@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Date, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, MasterBase, Money, fk

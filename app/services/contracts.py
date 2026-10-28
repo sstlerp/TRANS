@@ -12,7 +12,7 @@ from app.core.errors import BusinessError
 from app.core.utils import money, today
 from app.models.finance import (Contract, ContractVehicleAllocation, ExpenseAllocation, ExpenseTransaction, Invoice,
                                 InvoiceAllocation)
-from app.models.fleet import CostCenter, Vehicle
+from app.models.fleet import CostCenter
 from app.models.org import Customer
 from app.services.vehicles import cost_center_for
 

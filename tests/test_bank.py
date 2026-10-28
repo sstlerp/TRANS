@@ -1,6 +1,6 @@
 """Bank statements, classification, reconciliation, allocation and no double counting
 (acceptance criteria 12-23, 46; spec §13-§25, §64)."""
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 
 import pytest

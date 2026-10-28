@@ -2,7 +2,7 @@
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from app.services import masters, reports, vehicles
+from app.services import masters, reports
 from app.services.rules import set_rule
 from tests.factories import bank_txn, dmy, fuel_txn
 

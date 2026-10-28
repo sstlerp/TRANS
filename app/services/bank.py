@@ -34,7 +34,7 @@ from app.models.finance import (BankTransaction, BankTransactionAllocation, Cont
                                 ExpenseType, FinancialTransactionLink, Invoice, MatchingRule, ReconciliationHistory)
 from app.models.fleet import CostCenter, Vehicle
 from app.models.operations import FuelTransaction, MaintenanceJobCard, TollTransaction
-from app.models.org import BankAccount, Customer, Provider, Vendor
+from app.models.org import Customer, Provider, Vendor
 from app.models.tyres import Tyre, TyreRetreading
 from app.services import approvals
 from app.services.rules import rule

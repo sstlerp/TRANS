@@ -1,12 +1,10 @@
 """API, authentication, CSRF, RBAC, branch restriction, audit, documents, exports, pages."""
-from datetime import date
 
 from sqlalchemy import select
 
 from app.core.security import hash_password
 from app.models.system import AuditLog, Role, User
 from tests.conftest import login
-from tests.factories import dmy
 
 
 def make_user(db, username, role, branch_ids=None):
@@ -200,3 +198,24 @@ def test_import_wizard_api_flow(client, auth, db, fleet):
     tid0 = sug["items"][0]["id"]
     assert client.get(f"/api/recon/{tid0}", headers=auth).status_code == 200
     assert client.get(f"/api/recon/{tid0}/suggestions", headers=auth).status_code == 200
+
+
+def test_malformed_input_gives_a_message_not_a_server_error(client, auth, fleet):
+    """Regression: bad dates / ids / NaN numbers used to raise 500 errors."""
+    r = client.get("/api/masters/fuel_transactions?date_from=99/99/9999", headers=auth)
+    assert r.status_code in (400, 422) and "Invalid filter value" in r.json()["detail"]
+    assert client.get("/api/masters/vehicles?f_branch_id=abc", headers=auth).status_code in (400, 422)
+    r = client.get("/api/reports/profitability?date_from=31/02/2026&vehicle_id=abc", headers=auth)
+    assert r.status_code in (400, 422) and "Invalid report parameter" in r.json()["detail"]
+    for bad in ("NaN", "Infinity", "-Infinity"):
+        r = client.post("/api/masters/fuel_transactions", json={"quantity": bad}, headers=auth)
+        assert r.status_code in (400, 422), (bad, r.status_code)
+
+
+def test_to_decimal_rejects_non_finite():
+    import pytest as _pt
+    from app.core.utils import to_decimal
+    for bad in ("NaN", "inf", float("inf"), "-Infinity"):
+        with _pt.raises(ValueError):
+            to_decimal(bad)
+    assert str(to_decimal("₹ 1,234.50 Cr")) == "1234.50"

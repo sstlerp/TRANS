@@ -5,11 +5,11 @@ from __future__ import annotations
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit
-from app.core.errors import BusinessError, NotFound, OverrideRequired
+from app.core.errors import BusinessError, OverrideRequired
 from app.core.utils import normalize_vehicle_number, now, parse_date, to_decimal, today
 from app.models.fleet import (CostCategory, CostCenter, OdometerReading, SubCategoryAttribute, Vehicle,
                               VehicleAttributeValue, VehicleCostCenterHistory, VehicleFuel, VehicleSubCategory)

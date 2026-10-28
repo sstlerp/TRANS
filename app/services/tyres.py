@@ -9,7 +9,7 @@ master screen are blocked.
 """
 from __future__ import annotations
 
-from datetime import date, datetime, time
+from datetime import datetime, time
 from decimal import Decimal
 
 from sqlalchemy import func, select

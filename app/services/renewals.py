@@ -4,9 +4,8 @@ configurable reminders."""
 from __future__ import annotations
 
 from datetime import date, timedelta
-from decimal import Decimal
 
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.audit import audit, snapshot

@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.errors import BusinessError, OverrideRequired
-from app.models.tyres import Tyre, TyreFitment, TyreMovement, TyreRetreading, TyreWarrantyClaim
+from app.models.tyres import Tyre, TyreFitment, TyreMovement, TyreWarrantyClaim
 from app.services import masters, tyres
 from tests.factories import new_tyre
 

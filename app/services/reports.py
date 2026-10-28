@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time
 from decimal import Decimal
 from typing import Callable
 
@@ -70,7 +70,6 @@ def _amortize(amount, start: date | None, end: date | None, p_start: date, p_end
 def ledger(db: Session, start: date, end: date) -> list[Line]:
     inc_tax = rule(db, "EXPENSE_INCLUDE_TAX")
     lines: list[Line] = []
-    dt_end = datetime.combine(end, time.max)
     # fuel
     amt = FuelTransaction.total_amount if inc_tax else (FuelTransaction.amount - FuelTransaction.discount_amount)
     for cc, d, s in db.execute(select(FuelTransaction.cost_center_id, FuelTransaction.txn_date, func.sum(amt)).where(
@@ -814,7 +813,11 @@ def run(db: Session, key: str, params: dict) -> dict:
     r = REPORTS.get(key)
     if not r:
         raise NotFound("Report")
-    cols, rows = r.fn(db, params)
+    try:
+        cols, rows = r.fn(db, params)
+    except (ValueError, TypeError, ArithmeticError) as exc:  # malformed date / id / number in the parameters
+        from app.core.errors import BusinessError
+        raise BusinessError(f"Invalid report parameter: {exc}", "VALIDATION") from exc
     return {"key": key, "title": r.title, "columns": cols, "rows": rows}
 
 

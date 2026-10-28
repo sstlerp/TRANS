@@ -383,6 +383,14 @@ def _branch_filter(ctx: Ctx, spec: MasterSpec, stmt):
 
 
 def list_records(ctx: Ctx, spec: MasterSpec, params: dict, paginate: bool = True) -> dict:
+    """Server-side list. Malformed filter values (a bad date, text in an ID filter) give a 400 message, not a 500."""
+    try:
+        return _list_records(ctx, spec, params, paginate)
+    except (ValueError, TypeError, ArithmeticError) as exc:
+        raise BusinessError(f"Invalid filter value: {exc}", "VALIDATION") from exc
+
+
+def _list_records(ctx: Ctx, spec: MasterSpec, params: dict, paginate: bool = True) -> dict:
     ctx.user.require(spec.perm("view"))
     M = spec.model
     stmt = select(M)

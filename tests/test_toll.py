@@ -1,10 +1,10 @@
 """Toll: provider-specific templates, provider-scoped IDs, vehicle/plaza matching, review,
 duplicates, manual entry and API feed into one table (criteria 28-32)."""
-from datetime import date, timedelta
+from datetime import date
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.errors import BusinessError
 from app.models.imports import StatementImportTemplate

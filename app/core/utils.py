@@ -168,6 +168,8 @@ def to_decimal(v: Any, places: str | None = None) -> Decimal | None:
             raise ValueError(f"Invalid number '{v}'") from exc
         if neg:
             d = -d
+    if not d.is_finite():
+        raise ValueError(f"Invalid number '{v}'")
     if places:
         d = d.quantize(Decimal(places), rounding=ROUND_HALF_UP)
     return d

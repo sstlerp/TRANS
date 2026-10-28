@@ -6,7 +6,7 @@ import pytest
 from sqlalchemy import select
 
 from app.core.errors import BusinessError, OverrideRequired
-from app.models.fleet import CostCenter, OdometerReading, Vehicle, VehicleCostCenterHistory, VehicleFuel
+from app.models.fleet import CostCenter, Vehicle, VehicleCostCenterHistory, VehicleFuel
 from app.services import masters, vehicles
 from tests.factories import dmy
 

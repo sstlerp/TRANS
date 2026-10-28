@@ -15,7 +15,6 @@ from app.config import get_settings
 from app.core.errors import BusinessError, NotFound
 from app.core.utils import jsonable, parse_date, today
 from app.models.finance import BankTransaction, BankTransactionAllocation, ReconciliationHistory
-from app.models.fleet import SubCategoryAttribute, Vehicle
 from app.models.imports import (StatementImportBatch, StatementImportError, StatementImportRow,
                                 StatementImportTemplate, StatementTemplateColumn)
 from app.models.system import Notification

@@ -22,14 +22,13 @@ from openpyxl.utils import column_index_from_string, get_column_letter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.config import get_settings
 from app.core.audit import audit
 from app.core.errors import BusinessError, NotFound, OverrideRequired
 from app.core.utils import (file_sha256, jsonable, normalize_text, normalize_vehicle_number, now, parse_date,
                             parse_datetime, parse_time, sha256_of, to_decimal, today)
 from app.models.finance import BankTransaction
 from app.models.imports import (StatementImportBatch, StatementImportError, StatementImportRow,
-                                StatementImportTemplate, StatementTemplateColumn, ValueMapping)
+                                StatementImportTemplate, StatementTemplateColumn)
 from app.models.operations import FuelTransaction, MaintenanceJobCard, MaintenanceType, TollTransaction
 from app.models.org import BankAccount, Provider, Vendor
 from app.services import documents

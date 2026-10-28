@@ -267,3 +267,14 @@ def test_directory_summary_and_map(client, db, fake_osm):
     page = client.get("/toll/plazas/directory")
     assert page.status_code == 200 and "td-map" in page.text and "tile.openstreetmap.org" in page.headers["content-security-policy"]
     assert 'href="/toll/plazas/directory"' in client.get("/m/toll").text
+
+
+def test_saving_unchanged_fetched_plaza_does_not_lock_it(client, db, fake_osm):
+    h = {"Authorization": "Bearer " + login(client)["access_token"]}
+    client.post("/api/toll-plazas/sync", json={"states": ["TN"], "wait": True}, headers=h)
+    p = db.execute(select(TollPlaza).where(TollPlaza.external_plaza_id == "OSM-W202")).scalar_one()
+    rec = client.get(f"/api/masters/toll_plazas/{p.id}", headers=h).json()
+    meta = client.get("/api/masters/toll_plazas/meta", headers=h).json()
+    body = {f["name"]: rec.get(f["name"]) for f in meta["fields"] if not f.get("readonly")}
+    r = client.put(f"/api/masters/toll_plazas/{p.id}", json=body, headers=h)
+    assert r.status_code == 200 and r.json()["details_locked"] is False

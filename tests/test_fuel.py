@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from decimal import Decimal
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import select
 
 from app.core.errors import BusinessError, OverrideRequired
 from app.models.imports import StatementImportTemplate

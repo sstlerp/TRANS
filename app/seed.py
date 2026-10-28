@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import date, timedelta
+from datetime import timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.security import hash_password
-from app.core.utils import normalize_vehicle_number, now, today
+from app.core.utils import today
 from app.models import compliance as C
 from app.models import finance as FI
 from app.models import fleet as FL

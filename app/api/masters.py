@@ -5,10 +5,10 @@ from typing import Any
 
 from fastapi import APIRouter, Body, Depends, File, Form, Request, UploadFile
 from fastapi.responses import Response
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from app.api.deps import commit, ctx_dep
-from app.core.errors import NotFound, PermissionDenied
+from app.core.errors import NotFound
 from app.core.utils import jsonable, today
 from app.models.system import AuditLog, Document
 from app.services import documents, masters
