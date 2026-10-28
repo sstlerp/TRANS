@@ -1,8 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ spec.title }} · {{ brand_company_name }}{% endblock %}
 {% block content %}
+{# Same layout as the SSTL-ERP forms (party_master / employee_master):
+   dark sub-header toolbar (title pill centre, New / Edit / Save / Cancel right) →
+   entry summary bar (VSB) → entry form sections → record list with navy table header. #}
 <div class="vnd-page" id="master-page" data-key="{{ spec.key }}">
-  {# Dark form sub-header (SSTL): mode badge left · form title centre · actions right #}
   <div class="vnd-toolbar">
     <div class="vnd-tb-left"><span class="vnd-mode-badge" id="mode-badge">…</span></div>
     <span class="vnd-toolbar-title"><i class="ti {{ spec.icon }}" style="margin-right:.3rem"></i> {{ spec.title }}</span>
@@ -11,30 +13,26 @@
   <div class="vnd-body">
     <div id="page-desc"></div>
 
-    {# ── Upper part: data-entry form ── #}
-    <div class="form-block" id="form-block" style="display:none">
-      <div class="form-block-head">
-        <span class="fb-title"><i class="ti ti-forms"></i> <span id="fb-title">Entry form</span></span>
-        <span class="fb-hint" id="fb-hint"></span>
-        <button type="button" class="fb-toggle" id="fb-toggle" title="Hide / show the form"><i class="ti ti-chevron-up"></i></button>
-      </div>
-      <div class="form-block-body" id="fb-body">
-        <div class="vsb-bar" id="vsb">
-          <div class="vsb-bar-header">
-            <div class="vsb-header-left"><span class="vsb-bar-badge" id="vsb-mode">VIEW</span><span class="vsb-bar-id" id="vsb-id"></span><span id="vsb-status"></span></div>
-            <div class="vsb-bar-name-wrap"><span class="vsb-bar-name" id="vsb-name"></span><span class="vsb-bar-sub" id="vsb-sub"></span></div>
-            <div class="vsb-header-right"><span id="vsb-actions"></span>
-              <button class="vsb-bar-toggle" title="Record summary" onclick="document.getElementById('vsb-details').classList.toggle('collapsed')"><i class="ti ti-chevron-down"></i></button></div>
-          </div>
-          <div class="vsb-bar-details collapsed" id="vsb-details"></div>
-          <div class="vsb-wss-strip" id="vsb-strip" style="display:none"></div>
+    <div class="vnd-layout" id="form-outer">
+      {# ── Entry summary bar ── #}
+      <div class="vsb-bar" id="vsb">
+        <div class="vsb-bar-header">
+          <div class="vsb-header-left"><span class="vsb-bar-badge" id="vsb-mode">NEW</span><span class="vsb-bar-id" id="vsb-id"></span>
+            <span id="vsb-status"></span><span class="vsb-hint" id="fb-hint"></span></div>
+          <div class="vsb-bar-name-wrap"><span class="vsb-bar-name" id="vsb-name"></span><span class="vsb-bar-sub" id="vsb-sub"></span></div>
+          <div class="vsb-header-right"><span id="vsb-actions"></span>
+            <button class="vsb-bar-toggle" title="Show / hide the record summary"><i class="ti ti-chevron-down"></i></button>
+            <button class="vsb-bar-close" title="Cancel" onclick="document.getElementById('btn-cancel').click()">&#215;</button></div>
         </div>
-        <div class="vnd-form-wrap" id="form-wrap"></div>
-        <div class="form-actions" id="form-actions"></div>
+        <div class="vsb-bar-details collapsed" id="vsb-details"></div>
+        <div class="vsb-wss-strip" id="vsb-strip" style="display:none"></div>
       </div>
+
+      {# ── Entry form (upper part) ── #}
+      <div class="vnd-form-wrap" id="form-wrap" style="display:none"></div>
     </div>
 
-    {# ── Lower part: the table of records for this form ── #}
+    {# ── Record list for this form (lower part) ── #}
     <div class="vnd-list-wrap" id="list-wrap"></div>
   </div>
 </div>

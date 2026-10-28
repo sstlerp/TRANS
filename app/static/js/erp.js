@@ -148,6 +148,13 @@ const ERP = (() => {
 
   // ── shell behaviours ───────────────────────────────────────────
   function initShell() {
+    // sticky stack: app header → page toolbar → summary bar / list header (real heights, like SSTL's --actual-header-h)
+    const syncH = () => requestAnimationFrame(() => {
+      const h = $('.brand--inner'), t = $('.vnd-toolbar'), r = document.documentElement.style;
+      if (h) r.setProperty('--hdr-h', Math.ceil(h.getBoundingClientRect().height) + 'px');
+      if (t) r.setProperty('--tb-h', Math.ceil(t.getBoundingClientRect().height) + 'px');
+    });
+    syncH(); window.addEventListener('resize', syncH);
     // unread alerts badge
     get('/api/notifications/unread-count').then(r => {
       const b = $('#notif-count'); if (b && r.count) { b.textContent = r.count > 99 ? '99+' : r.count; b.style.display = 'inline'; }

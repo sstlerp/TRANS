@@ -37,18 +37,14 @@ const Master = (() => {
       (M.perms.edit ? `<button class="tb-btn tb-btn--new" id="btn-edit" style="display:none"><i class="ti ti-edit"></i> Edit</button>` : '') +
       `<button class="tb-btn tb-btn--save" id="btn-save" style="display:none"><i class="ti ti-device-floppy"></i> <span class="save-lbl">Save</span></button>
        <button class="tb-btn tb-btn--cancel" id="btn-cancel" style="display:none"><i class="ti ti-x"></i> Cancel</button>`;
-    $('#form-actions').innerHTML = `<button type="button" class="fa-btn fa-btn--save" id="fa-save"><i class="ti ti-device-floppy"></i> <span class="save-lbl">Save</span></button>
-      <button type="button" class="fa-btn fa-btn--clear" id="fa-clear"><i class="ti ti-eraser"></i> Clear</button>`;
     $('#btn-new') && ($('#btn-new').onclick = () => doNew());
     $('#btn-edit') && ($('#btn-edit').onclick = () => setMode('EDIT'));
     $('#btn-save').onclick = () => doSave();
-    $('#fa-save').onclick = () => doSave();
-    $('#fa-clear').onclick = () => S.id ? doClose() : doNew();
     $('#btn-cancel').onclick = doClose;
-    let hidden = false; try { hidden = localStorage.getItem('formhide:' + KEY) === '1'; } catch (_) { }
-    const applyHide = () => { $('#form-block').classList.toggle('fb-collapsed', hidden); };
-    $('#fb-toggle').onclick = () => { hidden = !hidden; try { localStorage.setItem('formhide:' + KEY, hidden ? '1' : '0'); } catch (_) { } applyHide(); };
-    applyHide();
+    let open = false; try { open = localStorage.getItem('vsbopen') === '1'; } catch (_) { }
+    $('#vsb-details').classList.toggle('collapsed', !open);
+    $('#vsb .vsb-bar-toggle').onclick = () => { const d = $('#vsb-details'); d.classList.toggle('collapsed');
+      try { localStorage.setItem('vsbopen', d.classList.contains('collapsed') ? '0' : '1'); } catch (_) { } };
     if (M.description) $('#page-desc').innerHTML = `<div class="note note-info"><i class="ti ti-info-circle"></i><div>${esc(M.description)}</div></div>`;
   }
 
@@ -71,33 +67,48 @@ const Master = (() => {
     Quantity: 'ti-droplet', Validation: 'ti-shield-check', Override: 'ti-alert-triangle', Plaza: 'ti-road', Review: 'ti-eye-check', Job: 'ti-tools',
     Work: 'ti-hammer', Downtime: 'ti-clock-pause', Specs: 'ti-adjustments', Purchase: 'ti-shopping-cart', Lifecycle: 'ti-refresh' };
 
+  // SSTL-ERP form layout: the first section across the full width (fields side by side), the remaining
+  // sections two per row inside grey column frames (vfw-cols / vfw-col), Remarks and line grids full width.
+  const gridFor = n => 'fg' + Math.max(2, Math.min(6, n));
   function renderForm() {
     const secs = sections();
-    const main = secs.filter(s => s.name !== 'Remarks');
+    let main = secs.filter(s => s.name !== 'Remarks');
     const rem = secs.filter(s => s.name === 'Remarks');
-    let html = '';
-    if (main.length <= 1) {
-      html += main.map(s => sectionHtml(s, 'fg4')).join('');
-    } else {
-      const ncol = Math.min(3, main.length);
-      const cols = Array.from({ length: ncol }, () => []);
-      main.forEach((s, i) => cols[i % ncol].push(s));
-      html += `<div class="vfw-cols" style="grid-template-columns:repeat(${ncol},1fr)">` +
-        cols.map(c => `<div class="vfw-col">${c.map(s => sectionHtml(s, 'fg2')).join('')}</div>`).join('') + '</div>';
+    const width = f => (f.type === 'textarea' || f.type === 'json' || f.type === 'multi') ? 2 : Math.min(f.span || 1, 2);
+    // compact: small sections (one or two plain fields) join the full-width top row while it has room
+    if (main.length > 1) {
+      const top = { ...main[0], fields: [...main[0].fields] };
+      const keep = [top];
+      for (const sct of main.slice(1)) {
+        const small = sct.fields.length <= 2 && sct.fields.every(f => width(f) === 1);
+        const used = top.fields.reduce((n, f) => n + width(f), 0);
+        if (small && used + sct.fields.length <= 6) top.fields.push(...sct.fields); else keep.push(sct);
+      }
+      main = keep;
     }
-    html += rem.map(s => sectionHtml(s, 'fg3')).join('');
+    const [first, ...rest] = main;
+    const cells = rest.map(sct => ({ sct, grid: sct.fields.length >= 3 ? 'fg3' : 'fg2' }));
+    const remarks = [...rem];
+    if (cells.length % 2 === 1 && remarks.length) cells.push({ sct: remarks.shift(), grid: 'fg1' });  // Remarks pairs the odd section
+    let html = '';
+    if (first) html += sectionHtml(first, gridFor(first.fields.reduce((n, f) => n + width(f), 0)));
+    if (cells.length) {
+      html += '<div class="vfw-cols">' + cells.map((c, i) => {
+        const wide = cells.length % 2 === 1 && i === cells.length - 1;
+        return `<div class="vfw-col${wide ? ' full' : ''}">${sectionHtml(c.sct, wide ? gridFor(c.sct.fields.length) : c.grid)}</div>`;
+      }).join('') + '</div>';
+    }
+    html += remarks.map(sct => sectionHtml(sct, 'fg1')).join('');
     html += `<div id="ext-sections"></div>`;
     html += M.children.map(childHtml).join('');
     $('#form-wrap').innerHTML = html;
-    $$('.vnd-section-head', $('#form-wrap')).forEach(h => h.onclick = () => h.parentElement.classList.toggle('collapsed'));
     for (const f of M.fields) wireField(f, $('#form-wrap'));
     for (const c of M.children) $(`#add-${c.key}`).onclick = () => addChildRow(c, {});
     if (EXT.afterForm) EXT.afterForm(api());
   }
 
   function sectionHtml(s, grid) {
-    return `<div class="vnd-section"><div class="vnd-section-head"><span class="sh-title"><i class="ti ${SEC_ICON[s.name] || 'ti-point'}"></i> ${esc(s.name)}</span>
-      <i class="ti ti-chevron-down sh-chevron"></i></div><div class="vnd-section-body"><div class="${grid}">
+    return `<div class="vnd-section"><div class="vnd-section-head"><span class="sh-title"><i class="ti ${SEC_ICON[s.name] || 'ti-point'}"></i> ${esc(s.name)}</span></div><div class="vnd-section-body"><div class="${grid}">
       ${s.fields.map(f => fieldHtml(f, 'fld-')).join('')}</div></div></div>`;
   }
 
@@ -108,7 +119,7 @@ const Master = (() => {
     let ctl;
     const ro = f.readonly ? ' disabled' : '';
     switch (f.type) {
-      case 'textarea': ctl = `<textarea class="f-input" id="${id}" data-f="${f.name}"${ro} maxlength="${f.maxlen || 4000}"></textarea>`; break;
+      case 'textarea': ctl = `<textarea class="f-input" rows="2" id="${id}" data-f="${f.name}"${ro} maxlength="${f.maxlen || 4000}"></textarea>`; break;
       case 'bool': ctl = `<div class="f-toggle-row"><label class="f-toggle"><input type="checkbox" id="${id}" data-f="${f.name}"${ro}><span class="f-toggle-track"></span><span class="f-toggle-thumb"></span></label>${compact ? '' : '<span class="f-toggle-lbl">Yes</span>'}</div>`; break;
       case 'select': case 'lookup': case 'fk': ctl = `<select class="f-input" id="${id}" data-f="${f.name}"${ro}><option value="">—</option></select>`; break;
       case 'multi': ctl = `<select class="f-input" id="${id}" data-f="${f.name}" multiple${ro}></select>`; break;
@@ -153,8 +164,8 @@ const Master = (() => {
     if (deps.length) el.addEventListener('change', () => deps.forEach(d => {
       const t = scope.querySelector(`[data-f="${d.name}"]`); if (t) loadOptions(d, t, t.value, scope);
     }));
-    el.addEventListener('input', updateVsb);
-    el.addEventListener('change', updateVsb);
+    el.addEventListener('input', () => { updateVsb(); liveVsb(); });
+    el.addEventListener('change', () => { updateVsb(); liveVsb(); });
   }
 
   function setVal(f, el, v) {
@@ -186,10 +197,10 @@ const Master = (() => {
   // ───────────────────────── child grids ─────────────────────────
   function childHtml(c) {
     return `<div class="vnd-section" id="child-${c.key}"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-list-details"></i> ${esc(c.label)}</span>
-      <i class="ti ti-chevron-down sh-chevron"></i></div><div class="vnd-section-body"><div class="child-wrap"><table class="child-tbl"><thead><tr>
+      </div><div class="vnd-section-body"><div class="child-wrap"><table class="child-tbl"><thead><tr>
       ${c.fields.map(f => `<th>${esc(f.label)}${f.required ? ' <span style="color:#DC2626">*</span>' : ''}</th>`).join('')}<th></th></tr></thead>
       <tbody id="rows-${c.key}"></tbody></table></div>
-      <div class="child-foot"><button type="button" class="ra-btn ra-edit" id="add-${c.key}"><i class="ti ti-plus"></i> Add line</button><span id="sum-${c.key}"></span></div></div></div>`;
+      <div class="child-foot"><button type="button" class="add-row-btn" id="add-${c.key}"><i class="ti ti-plus"></i> Add line</button><span id="sum-${c.key}"></span></div></div></div>`;
   }
   function addChildRow(c, data) {
     const tb = $(`#rows-${c.key}`);
@@ -243,19 +254,19 @@ const Master = (() => {
     S.mode = mode;
     const show = (id, v) => { const e = $(id); if (e) e.style.display = v ? '' : 'none'; };
     const editing = mode === 'NEW' || mode === 'EDIT';
-    $('#form-block').style.display = mode === 'LIST' ? 'none' : '';
+    $('#form-wrap').style.display = mode === 'LIST' ? 'none' : '';
     show('#btn-new', true);
     show('#btn-edit', mode === 'VIEW' && S.id && M.perms.edit);
     show('#btn-save', editing);
     show('#btn-cancel', !!S.id);
-    show('#form-actions', editing);
     $$('.save-lbl').forEach(e => e.textContent = mode === 'EDIT' ? 'Update' : 'Save');
-    $('#vsb').classList.toggle('show', !!S.id && mode !== 'LIST');
+    $('#vsb').classList.toggle('show', mode !== 'LIST');
     const badge = $('#mode-badge');
     badge.textContent = { NEW: 'New entry', EDIT: 'Editing', VIEW: 'Viewing', LIST: 'Records' }[mode];
     badge.className = 'vnd-mode-badge vnd-mode-badge--' + mode.toLowerCase();
-    $('#fb-hint').textContent = mode === 'NEW' ? 'Fill the form and press Save — the record appears in the table below.'
-      : mode === 'EDIT' ? 'Change the fields and press Update, or Cancel to discard.' : mode === 'VIEW' ? 'Select another row below to open it.' : '';
+    $('#fb-hint').textContent = mode === 'NEW' ? 'Fill the form and press Save — it is added to the list below.'
+      : mode === 'EDIT' ? 'Change the fields and press Update, or Cancel.' : '';
+    if (editing) renderVsbDetails(liveRec());
     setEditable(mode === 'NEW' || mode === 'EDIT');
     updateVsb();
     if (EXT.onMode) EXT.onMode(api(), mode);
@@ -296,7 +307,6 @@ const Master = (() => {
       renderVsbDetails(r);
       if (EXT.onLoad) EXT.onLoad(api(), r);
       $$('#list-body tr').forEach(tr => tr.classList.toggle('selected', +tr.dataset.id === id));
-      $('#form-block').classList.remove('fb-collapsed');
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (e) { errToast(e); }
   }
@@ -365,13 +375,28 @@ const Master = (() => {
     $('#vsb-id').textContent = M.code_field ? val(M.code_field) || (S.id ? '#' + S.id : '') : (S.id ? '#' + S.id : '');
     $('#vsb-name').textContent = val(M.title_field) || (S.mode === 'NEW' ? 'New ' + M.title : '');
     const nm = val(M.title_field) || (S.id ? '#' + S.id : '');
-    $('#fb-title').textContent = S.mode === 'NEW' ? 'New entry' : S.mode === 'EDIT' ? `Edit — ${nm}` : S.mode === 'VIEW' ? `View — ${nm}` : 'Entry form';
+    void nm;
     $('#vsb-sub').textContent = (M.subtitle_fields || []).map(val).filter(Boolean).join(' · ');
     const st = M.status_field && S.rec ? S.rec[M.status_field] : null;
     $('#vsb-status').innerHTML = st ? pill(st) : (S.rec && M.has_active ? (S.rec.is_active ? pill('ACTIVE') : pill('CANCELLED').replace('CANCELLED', 'INACTIVE')) : '');
     $('#vsb-actions').innerHTML = S.id ? actionButtons(S.rec, true) : '';
     wireActionButtons($('#vsb-actions'), S.rec);
   }
+  // current form values as a record (selects as their shown text) — keeps the summary bar live while typing
+  function liveRec() {
+    const r = { ...(S.rec || {}) };
+    for (const f of M.fields) {
+      const el = $(`#fld-${f.name}`);
+      if (!el) continue;
+      if (el.tagName === 'SELECT' && !el.multiple) { const o = el.options[el.selectedIndex]; r[f.name] = o && o.value ? o.value : null; r[f.name + '__label'] = o && o.value ? o.textContent : undefined; }
+      else if (f.type === 'bool') r[f.name] = el.checked;
+      else if (['date', 'datetime'].includes(f.type)) { r[f.name] = el.value || null; r[f.name + '__label'] = el.value || undefined; }
+      else if (f.type !== 'json' && f.type !== 'multi') r[f.name] = el.value === '' ? null : el.value;
+    }
+    return r;
+  }
+  let _vsbT;
+  function liveVsb() { clearTimeout(_vsbT); _vsbT = setTimeout(() => { if (S.mode === 'NEW' || S.mode === 'EDIT') renderVsbDetails(liveRec()); }, 150); }
   function renderVsbDetails(r) {
     const secs = sections().filter(s => s.name !== 'Remarks' && s.name !== 'Override').slice(0, 6);
     $('#vsb-details').innerHTML = secs.map(s => `<div class="vsb-bar-sect"><div class="vsb-bar-sect-title"><i class="ti ${SEC_ICON[s.name] || 'ti-point'}"></i> ${esc(s.name)}</div>
