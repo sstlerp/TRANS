@@ -22,7 +22,7 @@
   const { $, esc, get, post, money, num, ddmmyyyy, pill, toast, errToast } = ERP;
   const kpi = (label, v, cls = '', href = '', sub = '') =>
     `<a class="kpi ${cls}" ${href ? `href="${href}"` : ''}><div class="l">${esc(label)}</div><div class="v">${v}</div>${sub ? `<div class="s">${sub}</div>` : ''}</a>`;
-  const rupee = v => '₹ ' + money(v);
+  const rupee = v => "₹\u00a0" + money(v);
   const bars = (rows, lk, vk, fmt = x => num(x, 0)) => {
     const max = Math.max(1, ...rows.map(r => Number(r[vk]) || 0));
     return `<div class="bars">${rows.map(r => `<div class="bar-row"><span>${esc(r[lk] || '—')}</span><div class="bar-track"><div class="bar-fill" style="width:${(Number(r[vk]) || 0) / max * 100}%"></div></div><b style="text-align:right">${fmt(r[vk])}</b></div>`).join('') || '<div class="tbl-empty">No data</div>'}</div>`;
@@ -75,6 +75,17 @@
       ${kpi('Tyre warranty ≤ 30 d', a.tyre_warranty_expiring, '', '/masters/tyres')}
       ${kpi('Maintenance due', a.maintenance_due, a.maintenance_due ? 'amber' : 'green', '/masters/notifications?f_event_type=MAINTENANCE_DUE')}
     </div><ul class="mini-list" style="margin-top:.5rem">${a.critical.map(n => `<li><span class="pill pill-${n.severity === 'CRITICAL' ? 'red' : n.severity === 'WARNING' ? 'amber' : 'blue'}">${esc(n.severity)}</span><a href="${esc(n.link || '#')}" style="text-decoration:none;color:inherit">${esc(n.title)}</a></li>`).join('') || '<li style="color:#047857"><i class="ti ti-circle-check"></i> No unread alerts</li>'}</ul></div></div>
+    ${d.trips ? `<div class="card c12"><div class="card-h"><i class="ti ti-route"></i> Trips &amp; Freight<a href="/m/trips">Trips &amp; Freight →</a></div><div class="card-b"><div class="kpis">
+      ${kpi('Planned', d.trips.planned, '', '/masters/trips?f_status=PLANNED')}${kpi('In transit', d.trips.in_transit, 'blue', '/masters/trips?f_status=IN_TRANSIT')}
+      ${kpi('POD pending', d.trips.pod_pending, d.trips.pod_pending ? 'amber' : 'green', '/masters/trips?f_status=DELIVERED')}
+      ${kpi('To invoice', d.trips.to_invoice, d.trips.to_invoice ? 'amber' : 'green', '/masters/trips?f_status=POD_RECEIVED')}
+      ${kpi('E-way expiring', d.trips.eway_expiring, d.trips.eway_expiring ? 'amber' : 'green', '/masters/eway_bills?f_status=ACTIVE,EXTENDED')}
+      ${kpi('E-way expired in transit', d.trips.eway_expired_in_transit, d.trips.eway_expired_in_transit ? 'red' : 'green', '/masters/eway_bills?f_status=EXPIRED')}
+      ${kpi('Open driver advances', d.trips.open_advances, d.trips.open_advances ? 'amber' : '', '/masters/driver_advances?f_status=OPEN', rupee(d.trips.open_advance_amount))}
+      ${kpi('Settlements to approve', d.trips.settlements_pending, d.trips.settlements_pending ? 'amber' : '', '/masters/driver_settlements?f_status=DRAFT')}
+      ${kpi('E-invoice pending', d.trips.einvoice_pending, d.trips.einvoice_pending ? 'amber' : '', '/masters/invoices?f_einvoice_status=PENDING')}
+      ${kpi('Freight booked (month)', '₹\u00a0' + num(d.trips.freight_mtd, 0), 'green', '/reports?r=trip_profitability')}
+    </div></div></div>` : ''}
     <div class="card c12"><div class="card-h"><i class="ti ti-gauge"></i> Operations — month to date (from ${ddmmyyyy(o.month_start)})<a href="/reports?r=profitability">Profitability →</a></div><div class="card-b">
       <div class="kpis">${kpi('Fuel cost', rupee(o.fuel_cost), '', '/reports?r=fuel_summary')}${kpi('Toll cost', rupee(o.toll_cost), '', '/reports?r=toll_summary')}
         ${kpi('Maintenance cost', rupee(o.maintenance_cost), '', '/reports?r=maintenance_summary')}${kpi('Tyre cost', rupee(o.tyre_cost), '', '/reports?r=tyre_cost')}
@@ -86,7 +97,7 @@
   }
   $('#refresh').onclick = load;
   if ($('#run-jobs')) $('#run-jobs').onclick = async () => {
-    try { const r = await post('/api/admin/jobs/daily'); toast(`Checks complete: ${r.renewal_alerts} renewal alert(s), ${r.maintenance_alerts} maintenance alert(s)`); load(); }
+    try { const r = await post('/api/admin/jobs/daily'); toast(`Checks complete: ${r.renewal_alerts} renewal alert(s), ${r.maintenance_alerts} maintenance alert(s)${r.trips ? `, ${r.trips.eway_alerts} e-way bill alert(s), ${r.trips.pod_pending} POD pending` : ''}`); load(); }
     catch (e) { errToast(e); }
   };
   load();

@@ -45,7 +45,8 @@
     ['ign', 'Ignored', { f_recon_status: 'IGNORED' }], ['all', 'All', {}]];
   const S = { tab: P.get('dir') === 'DR' ? 'udr' : P.get('status') === 'AUTO_SUGGESTED' ? 'sug' : P.get('status') === 'PARTIALLY_MATCHED' ? 'par' : P.get('batch') ? 'all' : 'ucr', page: 1, sel: null, rows: [] };
   const TARGET_LABEL = { INVOICE: 'Invoice', CONTRACT: 'Contract (on-account / advance)', FUEL: 'Fuel transactions', TOLL: 'Toll transactions', MAINTENANCE: 'Maintenance job cards',
-    TYRE: 'Tyre purchases', TYRE_RETREAD: 'Tyre retreading', INSURANCE: 'Insurance policies', RENEWAL: 'Tax / permit / PESO renewals', EXPENSE: 'Vendor invoices / expenses', BANK: 'Bank transactions' };
+    TYRE: 'Tyre purchases', TYRE_RETREAD: 'Tyre retreading', INSURANCE: 'Insurance policies', RENEWAL: 'Tax / permit / PESO renewals', EXPENSE: 'Vendor invoices / expenses', BANK: 'Bank transactions',
+    DRIVER_ADVANCE: 'Driver advances', DRIVER_SETTLEMENT: 'Driver settlements (approved)' };
 
   function renderTabs() {
     $('#tabs').innerHTML = TABS.map(t => `<span class="party-tab ${S.tab === t[0] ? 'party-tab--active' : ''}" data-t="${t[0]}">${t[1]}</span>`).join('');
@@ -81,12 +82,14 @@
       btn('INVOICE_RECEIPT:INVOICE', 'ti-file-invoice', 'Match invoice(s)'), btn('CONTRACT_RECEIPT:CONTRACT', 'ti-file-certificate', 'Match contract income / advance'),
       btn('REFUND:REF', 'ti-receipt-refund', 'Match refund'), btn('CASHBACK:REF', 'ti-gift', 'Match cashback'), btn('REBATE:REF', 'ti-discount', 'Match rebate'),
       btn('REVERSAL:BANK', 'ti-arrow-back-up', 'Match reversal'), btn('INTERNAL_TRANSFER:BANK', 'ti-arrows-left-right', 'Match internal transfer'),
+      btn('DRIVER_RECOVERY:DRIVER_SETTLEMENT', 'ti-user-dollar', 'Match driver recovery'),
       btn('classify', 'ti-tag', 'Classify credit', 'ra-act'), btn('alloc', 'ti-chart-pie', 'Create other income / receipt', 'ra-act')]
       : [btn('alloc', 'ti-chart-pie', 'Allocate / split to cost centers', 'ra-act'), btn('FUEL_PAYMENT:FUEL', 'ti-gas-station', 'Match fuel'),
       btn('TOLL_PAYMENT:TOLL', 'ti-road', 'Match toll'), btn('MAINTENANCE_PAYMENT:MAINTENANCE', 'ti-tools', 'Match maintenance'),
       btn('TYRE_PAYMENT:TYRE', 'ti-circle-dashed', 'Match tyre'), btn('INSURANCE_PAYMENT:INSURANCE', 'ti-shield', 'Match insurance'),
       btn('TAX_PAYMENT:RENEWAL', 'ti-receipt-tax', 'Match tax'), btn('PERMIT_PAYMENT:RENEWAL', 'ti-map-route', 'Match permit'), btn('PESO_PAYMENT:RENEWAL', 'ti-flame', 'Match PESO'),
       btn('VENDOR_PAYMENT:EXPENSE', 'ti-receipt-2', 'Match vendor invoice'), btn('asset', 'ti-building-factory', 'Asset purchase'),
+      btn('DRIVER_PAYMENT:DRIVER_ADVANCE', 'ti-cash-banknote', 'Match driver advance'), btn('DRIVER_PAYMENT:DRIVER_SETTLEMENT', 'ti-receipt-rupee', 'Match driver settlement'),
       btn('INTERNAL_TRANSFER:BANK', 'ti-arrows-left-right', 'Internal transfer'), btn('REVERSAL:BANK', 'ti-arrow-back-up', 'Reversal'), btn('classify', 'ti-tag', 'Classify', 'ra-act')];
     $('#detail').innerHTML = `
       <div style="font-size:.74rem;margin-bottom:.3rem"><b>${esc(t.bank_account_id__label || '')}</b><br>${esc(t.narration || '')}</div>

@@ -152,6 +152,8 @@ def ledger(db: Session, start: date, end: date) -> list[Line]:
             lines.append(Line(d, cc, _grp(g), -money(s), source="bank_credit"))
     lines += _refund_lines(db, start, end)
     lines += _income_lines(db, start, end)
+    from app.services import trips
+    lines += trips.ledger_lines(db, start, end, Line)  # trip expenses + approved driver allowances
     return lines
 
 
@@ -791,6 +793,135 @@ def _r_vhist(db, p):
                      _name(db, VehicleSubCategory, h.new_sub_category_id), cc.code if cc else "",
                      fmt_date(h.effective_from), fmt_date(h.effective_to) or "current", h.reason])
     return ["Vehicle", "Category", "Sub-category", "Cost Center", "From", "To", "Reason"], rows
+
+
+# ───────────────────────── trips & freight ─────────────────────────
+def _trip_names(db, t):
+    from app.models.compliance import Driver
+    from app.models.org import Customer
+    v = db.get(Vehicle, t.vehicle_id)
+    d = db.get(Driver, t.driver_id) if t.driver_id else None
+    c = db.get(Customer, t.customer_id) if t.customer_id else None
+    return (v.registration_number if v else ""), (d.name if d else ""), (c.name if c else "")
+
+
+@report("trip_profitability", "Trip Profitability (freight vs trip cost)", "Trips & Freight",
+        ("date_from", "date_to", "vehicle_id", "customer_id"))
+def _r_trip_profit(db, p):
+    from app.services.trips import trip_profitability
+    s, e = _period(p)
+    keys = ["trip", "lr", "date", "vehicle", "customer", "route", "status", "freight", "fuel", "toll", "expenses",
+            "driver", "cost", "margin", "margin_pct", "km", "cost_per_km"]
+    cols = ["Trip", "LR", "Date", "Vehicle", "Customer", "Route", "Status", "Freight", "Fuel", "Toll", "Trip Expenses",
+            "Driver Allowance", "Total Cost", "Margin", "Margin %", "KM", "Cost/KM"]
+    rows = trip_profitability(db, s, e, _i(p, "vehicle_id"), _i(p, "customer_id"))
+    out = [[r[k] for k in keys] for r in rows]
+    if rows:
+        tot = {k: sum((r[k] or ZERO) for r in rows) for k in ("freight", "fuel", "toll", "expenses", "driver", "cost", "margin")}
+        out.append(["TOTAL", "", "", "", "", "", ""] + [tot[k] for k in ("freight", "fuel", "toll", "expenses", "driver",
+                                                                          "cost", "margin")] + ["", "", ""])
+    return cols, out
+
+
+@report("lr_register", "LR / Trip Register", "Trips & Freight", ("date_from", "date_to", "vehicle_id", "customer_id", "status"))
+def _r_lr(db, p):
+    from app.models.trips import Trip
+    s, e = _period(p)
+    q = select(Trip).where(Trip.trip_date.between(s, e))
+    if p.get("vehicle_id"):
+        q = q.where(Trip.vehicle_id == int(p["vehicle_id"]))
+    if p.get("customer_id"):
+        q = q.where(Trip.customer_id == int(p["customer_id"]))
+    if p.get("status"):
+        q = q.where(Trip.status.in_([x.strip().upper() for x in p["status"].split(",")]))
+    rows = []
+    for t in db.execute(q.order_by(Trip.trip_date, Trip.id)).scalars():
+        v, d, c = _trip_names(db, t)
+        rows.append([t.trip_number, t.lr_number, fmt_date(t.trip_date), c, t.consignor_name, t.consignee_name,
+                     f"{t.origin} → {t.destination}", v, d, t.goods_description, t.packages, t.weight_tonnes,
+                     t.goods_value, t.freight_payment, t.total_freight, t.advance_received, t.balance_freight, t.status,
+                     fmt_date(t.pod_received_date)])
+    return ["Trip", "LR", "Date", "Customer", "Consignor", "Consignee", "Route", "Vehicle", "Driver", "Goods", "Packages",
+            "Weight (t)", "Goods Value", "Freight Pay", "Total Freight", "Advance", "Balance", "Status", "POD"], rows
+
+
+@report("pod_pending", "POD Pending (delivered, proof of delivery not received)", "Trips & Freight", ())
+def _r_pod(db, p):
+    from app.models.trips import Trip
+    rows = []
+    for t in db.execute(select(Trip).where(Trip.status == "DELIVERED").order_by(Trip.actual_end)).scalars():
+        v, d, c = _trip_names(db, t)
+        days = (today() - t.actual_end.date()).days if t.actual_end else None
+        rows.append([t.trip_number, t.lr_number, c, f"{t.origin} → {t.destination}", v, d,
+                     t.actual_end.strftime("%d/%m/%Y %H:%M") if t.actual_end else "", days, t.total_freight])
+    return ["Trip", "LR", "Customer", "Route", "Vehicle", "Driver", "Delivered", "Days Pending", "Freight"], rows
+
+
+@report("eway_register", "E-way Bill Register / Validity", "Trips & Freight", ("date_from", "date_to", "status"))
+def _r_ewb(db, p):
+    from app.models.trips import EwayBill, Trip
+    s, e = _period(p)
+    q = select(EwayBill).where(func.date(EwayBill.generated_at).between(s, e))
+    if p.get("status"):
+        q = q.where(EwayBill.status.in_([x.strip().upper() for x in p["status"].split(",")]))
+    rows = []
+    from app.core.utils import now
+    for b in db.execute(q.order_by(EwayBill.valid_until)).scalars():
+        t = db.get(Trip, b.trip_id) if b.trip_id else None
+        v = db.get(Vehicle, b.vehicle_id) if b.vehicle_id else None
+        left = round((b.valid_until - now()).total_seconds() / 3600, 1) if b.valid_until and b.status in ("ACTIVE", "EXTENDED") else None
+        rows.append([b.ewb_number, t.trip_number if t else "", t.status if t else "", v.registration_number if v else "",
+                     b.generated_at.strftime("%d/%m/%Y %H:%M"), b.valid_until.strftime("%d/%m/%Y %H:%M") if b.valid_until else "",
+                     left, b.distance_km, b.goods_value, b.extension_count, b.status])
+    return ["E-way Bill", "Trip", "Trip Status", "Vehicle", "Generated", "Valid Until", "Hours Left", "KM", "Goods Value",
+            "Extensions", "Status"], rows
+
+
+@report("driver_advances", "Driver Advances Outstanding", "Trips & Freight", ())
+def _r_adv(db, p):
+    from app.models.compliance import Driver
+    from app.models.trips import DriverAdvance
+    rows = []
+    for name, code, n, amt, oldest in db.execute(select(Driver.name, Driver.driver_code, func.count(),
+                                                        func.sum(DriverAdvance.amount), func.min(DriverAdvance.advance_date))
+                                                 .join(Driver, Driver.id == DriverAdvance.driver_id)
+                                                 .where(DriverAdvance.status == "OPEN")
+                                                 .group_by(Driver.name, Driver.driver_code)).all():
+        rows.append([code, name, n, money(amt), fmt_date(oldest), (today() - oldest).days if oldest else None])
+    return ["Driver Code", "Driver", "Open Advances", "Amount", "Oldest", "Age (days)"], rows
+
+
+@report("driver_settlements", "Driver Settlement Register", "Trips & Freight", ("date_from", "date_to"))
+def _r_settle(db, p):
+    from app.models.compliance import Driver
+    from app.models.trips import DriverSettlement, Trip
+    s, e = _period(p)
+    rows = []
+    for st in db.execute(select(DriverSettlement).where(DriverSettlement.settlement_date.between(s, e))
+                         .order_by(DriverSettlement.settlement_date)).scalars():
+        d = db.get(Driver, st.driver_id)
+        t = db.get(Trip, st.trip_id) if st.trip_id else None
+        rows.append([st.settlement_number, fmt_date(st.settlement_date), d.name if d else "", t.trip_number if t else "",
+                     st.total_expenses, st.allowance_amount, st.other_earnings, st.deductions, st.total_advances,
+                     st.net_payable, st.status, fmt_date(st.paid_date)])
+    return ["Settlement", "Date", "Driver", "Trip", "Driver Expenses", "Allowance", "Other", "Deductions", "Advances",
+            "Net (+pay / −recover)", "Status", "Paid / Recovered"], rows
+
+
+@report("einvoice", "E-Invoice (IRN) Status", "Income & Expenses", ("date_from", "date_to", "status"))
+def _r_einv(db, p):
+    from app.models.org import Customer
+    s, e = _period(p)
+    q = select(Invoice).where(Invoice.invoice_date.between(s, e), Invoice.invoice_type != "ADVANCE")
+    if p.get("status"):
+        q = q.where(Invoice.einvoice_status.in_([x.strip().upper() for x in p["status"].split(",")]))
+    rows = []
+    for inv in db.execute(q.order_by(Invoice.invoice_date)).scalars():
+        c = db.get(Customer, inv.customer_id)
+        rows.append([inv.invoice_number, fmt_date(inv.invoice_date), c.name if c else "", c.gstin if c else "",
+                     inv.total_amount, inv.einvoice_status, inv.irn, inv.irn_ack_number,
+                     inv.irn_ack_date.strftime("%d/%m/%Y %H:%M") if inv.irn_ack_date else ""])
+    return ["Invoice", "Date", "Customer", "GSTIN", "Total", "E-Invoice", "IRN", "Ack No.", "Ack Date"], rows
 
 
 @report("audit", "Audit Log", "Audit", ("date_from", "date_to", "entity_type", "action"))

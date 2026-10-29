@@ -113,4 +113,7 @@ def summary(db: Session, user) -> dict:
                      for n in db.execute(select(Notification).where(Notification.is_read.is_(False)).order_by(
                          Notification.severity.asc(), Notification.created_at.desc()).limit(10)).scalars()],
     }
+    if user is None or user.has("trip.view"):
+        from app.services import trips
+        out["trips"] = trips.dashboard_counts(db)
     return jsonable(out)

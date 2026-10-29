@@ -79,7 +79,14 @@ VENDOR_PAYMENT, OTHER`.
 * `GET /api/tyres/vehicle/{vehicle_id}` (positions + fitted tyres) · `GET /api/tyres/{tyre_id}/timeline` (history + cost/km)
 * `GET /api/vehicles/attribute-definitions/{sub_category_id}` · `GET /api/vehicles/{id}/classification?on=DD/MM/YYYY`
 * `GET /api/reports` · `GET /api/reports/{key}?…` · `GET /api/reports/{key}/export?fmt=xlsx|csv|pdf`
-* `POST /api/operations/rematch/{toll|fuel}` · `POST /api/admin/jobs/daily`
+* `POST /api/operations/rematch/{toll|fuel}` · `POST /api/admin/jobs/daily` (also refreshes e-way bill status and
+  raises e-way expiry, POD pending and unsettled-advance alerts)
+* `GET /api/trips/{trip_id}/eway-json` — the trip's e-way bill details in the GST portal's bulk-generation JSON
+  layout (download). Header `X-Missing-Fields` lists fields still empty (e.g. `docNo,fromPincode`). Trips, e-way
+  bills, driver advances and settlements are generic screens: `/api/masters/trips`, `eway_bills`, `driver_advances`,
+  `driver_settlements` with actions such as `trips/{id}/actions/start|deliver|pod|invoice|close|cancel`,
+  `eway_bills/{id}/actions/extend|part_b|close|cancel`, `driver_settlements/{id}/actions/approve|pay|cancel`,
+  `invoices/{id}/actions/cancel_irn`.
 * Toll plaza master from the internet (toll ID, name, place, state): `GET /api/toll-plazas/sync/sources`,
   `GET /api/toll-plazas/sync/states`, `POST /api/toll-plazas/sync`, `GET /api/toll-plazas/sync/runs[/{id}]` — see
   `docs/INTEGRATIONS.md`.

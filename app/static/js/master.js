@@ -103,7 +103,7 @@ const Master = (() => {
     html += M.children.map(childHtml).join('');
     $('#form-wrap').innerHTML = html;
     for (const f of M.fields) wireField(f, $('#form-wrap'));
-    for (const c of M.children) $(`#add-${c.key}`).onclick = () => addChildRow(c, {});
+    for (const c of M.children) if (!c.readonly) $(`#add-${c.key}`).onclick = () => addChildRow(c, {});
     if (EXT.afterForm) EXT.afterForm(api());
   }
 
@@ -196,19 +196,20 @@ const Master = (() => {
 
   // ───────────────────────── child grids ─────────────────────────
   function childHtml(c) {
-    return `<div class="vnd-section" id="child-${c.key}"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-list-details"></i> ${esc(c.label)}</span>
+    // read-only grids (e.g. items linked by the server) show their rows only: no add / remove
+    return `<div class="vnd-section${c.readonly ? ' child-ro' : ''}" id="child-${c.key}"><div class="vnd-section-head"><span class="sh-title"><i class="ti ti-list-details"></i> ${esc(c.label)}</span>
       </div><div class="vnd-section-body"><div class="child-wrap"><table class="child-tbl"><thead><tr>
-      ${c.fields.map(f => `<th>${esc(f.label)}${f.required ? ' <span style="color:#DC2626">*</span>' : ''}</th>`).join('')}<th></th></tr></thead>
+      ${c.fields.map(f => `<th>${esc(f.label)}${f.required ? ' <span style="color:#DC2626">*</span>' : ''}</th>`).join('')}${c.readonly ? '' : '<th></th>'}</tr></thead>
       <tbody id="rows-${c.key}"></tbody></table></div>
-      <div class="child-foot"><button type="button" class="add-row-btn" id="add-${c.key}"><i class="ti ti-plus"></i> Add line</button><span id="sum-${c.key}"></span></div></div></div>`;
+      <div class="child-foot">${c.readonly ? '<span></span>' : `<button type="button" class="add-row-btn" id="add-${c.key}"><i class="ti ti-plus"></i> Add line</button>`}<span id="sum-${c.key}"></span></div></div></div>`;
   }
   function addChildRow(c, data) {
     const tb = $(`#rows-${c.key}`);
     const tr = document.createElement('tr');
     tr.innerHTML = c.fields.map(f => `<td>${fieldHtml(f, `c-${c.key}-${tb.children.length}-`, true)}</td>`).join('') +
-      `<td class="rm"><button type="button" class="ra-btn ra-del" title="Remove"><i class="ti ti-x"></i></button></td>`;
+      (c.readonly ? '' : `<td class="rm"><button type="button" class="ra-btn ra-del" title="Remove"><i class="ti ti-x"></i></button></td>`);
     tb.appendChild(tr);
-    tr.querySelector('.ra-del').onclick = () => { tr.remove(); childSum(c); };
+    if (!c.readonly) tr.querySelector('.ra-del').onclick = () => { tr.remove(); childSum(c); };
     for (const f of c.fields) {
       const el = tr.querySelector(`[data-f="${f.name}"]`);
       if (f.type === 'date') maskDate(el, false);
@@ -248,6 +249,7 @@ const Master = (() => {
       el.disabled = !on || f.readonly || (edit && f.readonly_on_edit);
     }
     $$('#form-wrap .child-tbl .f-input, #form-wrap .child-tbl input, #form-wrap .child-foot button, #form-wrap .child-tbl .ra-del').forEach(e => e.disabled = !on);
+    $$('#form-wrap .child-ro .f-input, #form-wrap .child-ro input').forEach(e => e.disabled = true);
     $$('#ext-sections .f-input, #ext-sections input').forEach(e => e.disabled = !on);
   }
   function setMode(mode) {

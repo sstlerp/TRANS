@@ -35,6 +35,7 @@ from app.models.finance import (BankTransaction, BankTransactionAllocation, Cont
 from app.models.fleet import CostCenter, Vehicle
 from app.models.operations import FuelTransaction, MaintenanceJobCard, TollTransaction
 from app.models.org import Customer, Provider, Vendor
+from app.models.trips import DriverAdvance, DriverSettlement
 from app.models.tyres import Tyre, TyreRetreading
 from app.services import approvals
 from app.services.rules import rule
@@ -67,6 +68,9 @@ TARGETS: dict[str, Target] = {
     "EXPENSE": Target(ExpenseTransaction, "total_amount", "expense_date", ("document_number", "invoice_number"),
                       "Vendor invoice / expense"),
     "BANK": Target(BankTransaction, "amount", "txn_date", ("utr", "reference_number"), "Bank transaction"),
+    "DRIVER_ADVANCE": Target(DriverAdvance, "amount", "advance_date", ("advance_number", "reference"), "Driver advance"),
+    "DRIVER_SETTLEMENT": Target(DriverSettlement, "settle_amount", "settlement_date",
+                                ("settlement_number", "payment_reference"), "Driver settlement"),
 }
 
 # which link types are allowed from a credit / debit and to which targets
@@ -88,6 +92,9 @@ LINK_RULES: dict[str, dict] = {
     "PERMIT_PAYMENT": {"dir": "DR", "targets": {"RENEWAL"}, "kind": "SETTLE"},
     "PESO_PAYMENT": {"dir": "DR", "targets": {"RENEWAL"}, "kind": "SETTLE"},
     "VENDOR_PAYMENT": {"dir": "DR", "targets": {"EXPENSE", "MAINTENANCE", "TYRE", "TYRE_RETREAD"}, "kind": "SETTLE"},
+    # money to / from drivers: advances are not cost, settlements carry the allowance (cost) — links only settle
+    "DRIVER_PAYMENT": {"dir": "DR", "targets": {"DRIVER_ADVANCE", "DRIVER_SETTLEMENT"}, "kind": "SETTLE"},
+    "DRIVER_RECOVERY": {"dir": "CR", "targets": {"DRIVER_SETTLEMENT"}, "kind": "SETTLE"},
     "OTHER": {"dir": "ANY", "targets": set(TARGETS), "kind": "SETTLE"},
 }
 LIVE = ("MATCHED",)
@@ -838,11 +845,15 @@ def unsettled_targets(db: Session, ttype: str, params: dict, limit: int = 200) -
     if params.get("date_to"):
         from app.core.utils import parse_date
         q = q.where(getattr(M, tg.date_attr) <= parse_date(params["date_to"]))
-    for k in ("provider_id", "vendor_id", "customer_id", "vehicle_id"):
+    for k in ("provider_id", "vendor_id", "customer_id", "vehicle_id", "driver_id"):
         if params.get(k) and hasattr(M, k):
             q = q.where(getattr(M, k) == int(params[k]))
     if ttype == "INVOICE":
         q = q.where(Invoice.status.in_(["OPEN", "PARTIALLY_PAID"]), Invoice.invoice_type != "CREDIT_NOTE")
+    if ttype == "DRIVER_ADVANCE":
+        q = q.where(DriverAdvance.status != "CANCELLED")
+    if ttype == "DRIVER_SETTLEMENT":  # pay / recover only what has been approved
+        q = q.where(DriverSettlement.status.in_(["APPROVED", "PAID"]), DriverSettlement.settle_amount > 0)
     if params.get("q"):
         q = q.where(or_(*[getattr(M, a).ilike(f"%{params['q']}%") for a in tg.ref_attrs]))
     kind = "REFUND" if params.get("kind") == "REFUND" else "SETTLE"

@@ -45,6 +45,7 @@
   const NOTES = {
     profitability: 'Operating cost comes from operational records (fuel, toll, maintenance, tyres, insurance, tax/permit/PESO, expenses) plus bank debits allocated directly to cost centers. Bank payments linked to operational records are settlements and are not counted twice. Refunds/cashbacks reduce cost or add other income per business rules. Items without a cost center appear as UNALLOCATED.',
     category_costs: 'Each transaction is attributed to the category/sub-category that applied to the vehicle on the transaction date (effective-dated classification history).',
+    trip_profitability: 'Freight is the trip total (excl. GST). Fuel and toll are the vehicle\'s transactions between trip start and delivery; trip expenses are all expenses entered on the trip; driver allowance comes from approved settlements for the trip. Company profit and loss uses invoices, not this view.',
     tyre_cost: 'Cost/km = (purchase + retreading + repairs − warranty credits − scrap value) ÷ km run. GST, warranty and scrap treatment are configurable business rules.' };
   async function init() {
     REPORTS = await get('/api/reports');

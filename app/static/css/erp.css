@@ -122,6 +122,7 @@ button{font-family:inherit}
 .mod--rose{--mod-accent:#BE123C;--mod-border:rgba(236,72,153,.22);--mod-tint:#FFF1F2}
 .mod--indigo{--mod-accent:#4338CA;--mod-border:rgba(99,102,241,.25);--mod-tint:#EEF2FF}
 .mod--sky{--mod-accent:#0369A1;--mod-border:rgba(14,165,233,.25);--mod-tint:#F0F9FF}
+.mod--lime{--mod-accent:#3F6212;--mod-border:rgba(101,163,13,.28);--mod-tint:#F7FEE7}
 .mod--slate{--mod-accent:#334155;--mod-border:rgba(100,116,139,.25);--mod-tint:#F8FAFC}
 .page-crumb{display:flex;justify-content:center;margin:.2rem 0 0}
 .page-crumb span{display:inline-flex;align-items:center;gap:.35rem;font:700 .66rem 'Sora',sans-serif;letter-spacing:.12em;text-transform:uppercase;

@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -28,11 +28,12 @@ from app.models import tyres as TY
 from app.services.rules import DEFAULTS
 
 MODULES = ["dashboard", "org", "master", "fleet", "driver", "compliance", "contract", "finance", "import", "fuel",
-           "toll", "maintenance", "tyre", "vendor", "report", "admin", "audit", "approval", "notification", "document"]
+           "toll", "maintenance", "tyre", "vendor", "report", "admin", "audit", "approval", "notification", "document",
+           "trip"]
 CRUD = ["view", "create", "edit", "delete"]
 SPECIAL = {"fleet": ["reclassify", "odometer_override"], "compliance": ["renew"], "finance": ["match", "allocate"],
            "fuel": ["override"], "tyre": ["move", "dispose", "correct", "override"], "import": ["run"],
-           "report": ["export"], "approval": ["approve"]}
+           "report": ["export"], "approval": ["approve"], "trip": ["approve"]}
 
 
 def upsert(db: Session, model, keys: dict, values: dict | None = None):
@@ -68,31 +69,36 @@ def seed_toll_sources(db: Session) -> None:
 
 def seed_security(db: Session) -> None:
     perms = {}
+    existing = {p.code for p in db.execute(select(S.Permission)).scalars()}
     for m in MODULES:
         for a in CRUD + SPECIAL.get(m, []):
             code = f"{m}.{a}"
             perms[code] = upsert(db, S.Permission, {"code": code}, {"module": m, "action": a,
                                                                    "description": f"{a.title()} {m}"})
+    new_perms = set(perms) - existing  # permissions added by an upgrade (e.g. a new module)
     roles = {
         "ADMIN": ("Administrator", list(perms)),
         "FINANCE": ("Finance / Accounts", [p for p in perms if p.split(".")[0] in (
             "dashboard", "finance", "contract", "report", "import", "vendor", "notification", "document", "audit")
             or p in ("fleet.view", "fuel.view", "toll.view", "maintenance.view", "tyre.view", "compliance.view",
-                     "master.view", "org.view", "approval.view", "driver.view")]),
+                     "master.view", "org.view", "approval.view", "driver.view", "trip.view", "trip.approve")]),
         "OPERATIONS": ("Fleet Operations", [p for p in perms if p.split(".")[0] in (
             "dashboard", "fleet", "driver", "compliance", "fuel", "toll", "maintenance", "tyre", "import", "report",
-            "notification", "document", "vendor") and p not in ("fleet.odometer_override", "fuel.override",
-                                                                 "tyre.correct", "tyre.override")]
+            "notification", "document", "vendor", "trip") and p not in ("fleet.odometer_override", "fuel.override",
+                                                                         "tyre.correct", "tyre.override", "trip.approve")]
             + ["master.view", "org.view", "approval.view"]),
         "APPROVER": ("Approver / Manager", [p for p in perms if p.endswith(".view")] + [
             "approval.approve", "fleet.odometer_override", "fuel.override", "tyre.override", "tyre.correct",
-            "report.export", "audit.view"]),
+            "report.export", "audit.view", "trip.approve"]),
         "VIEWER": ("Read-only", [p for p in perms if p.endswith(".view") and not p.startswith(("admin", "audit"))]),
     }
     for code, (name, plist) in roles.items():
         r = upsert(db, S.Role, {"code": code}, {"name": name})
         if not r.permissions:
             r.permissions = [perms[p] for p in sorted(set(plist))]
+        else:  # upgrade: give built-in roles the permissions of newly added modules (edits to old ones are kept)
+            have = {p.code for p in r.permissions}
+            r.permissions = list(r.permissions) + [perms[p] for p in sorted(new_perms & set(plist) - have)]
     pw = os.environ.get("ERP_ADMIN_PASSWORD", "Admin@12345")
     admin = upsert(db, S.User, {"username": "admin"}, {"full_name": "System Administrator", "password_hash": hash_password(pw),
                                                         "is_superuser": True, "must_change_password": "ERP_ADMIN_PASSWORD" not in os.environ})
@@ -123,9 +129,13 @@ LOOKUPS = {
     "RETREAD_TYPE": ["PRECURED", "MOULD_CURE", "HOT", "COLD"],
     "DOCUMENT_TYPE": ["INSURANCE_POLICY", "TAX_RECEIPT", "PERMIT", "FITNESS_CERT", "PUCC", "PESO_LICENSE", "HAZMAT_CERT",
                       "RC", "DRIVING_LICENSE", "ID_PROOF", "CONTRACT", "INVOICE", "BANK_STATEMENT", "TOLL_STATEMENT",
-                      "FUEL_STATEMENT", "MAINTENANCE_INVOICE", "TYRE_INVOICE", "WARRANTY_CLAIM", "PHOTO", "OTHER"],
+                      "FUEL_STATEMENT", "MAINTENANCE_INVOICE", "TYRE_INVOICE", "WARRANTY_CLAIM", "PHOTO",
+                      "LORRY_RECEIPT", "POD", "EWAY_BILL", "EINVOICE", "TRIP_BILL", "OTHER"],
     "MAINTENANCE_CATEGORY": ["PREVENTIVE", "BREAKDOWN", "REPAIR", "SERVICE", "ACCIDENT", "BODY_WORK", "ELECTRICAL"],
     "TOLL_DIRECTION": ["UP", "DOWN", "ENTRY", "EXIT", "NA"],
+    "TRIP_EXPENSE_HEAD": ["LOADING", "UNLOADING", "TOLL_CASH", "FUEL_CASH", "PARKING", "POLICE_RTO", "WEIGHBRIDGE",
+                          "BORDER_CHECKPOST", "FOOD", "REPAIR", "TYRE_PUNCTURE", "MOBILE", "OTHER"],
+    "PACKING_TYPE": ["BAGS", "BOXES", "DRUMS", "PALLETS", "BALES", "COILS", "LOOSE", "BULK", "CONTAINER", "OTHER"],
 }
 
 
@@ -550,12 +560,65 @@ def seed_demo(db: Session) -> None:
     for code, name, ts in (("TOLL_A", "TN01AB1234", "34161FA82032D6E800001234"),):
         upsert(db, OP.TollVehicleMapping, {"provider_id": prov[code], "external_vehicle_number": name},
                {"vehicle_id": v["V001"].id, "fastag_id": ts})
+    seed_demo_trips(db, ctx, v, cust, st)
+
+
+def seed_demo_trips(db: Session, ctx, v: dict, cust: dict, st: dict) -> None:
+    """Three demo trips (delivered with POD, in transit with an e-way bill, planned), advances and a settlement."""
+    from app.models import trips as TR
+    from app.services import masters
+    if db.execute(select(TR.Trip.id).where(TR.Trip.lr_number == "LR-1001")).first():
+        return
+    drv = {d.driver_code: d.id for d in db.execute(select(C.Driver)).scalars()}
+    tspec, now_ = masters.get_spec("trips"), datetime.now().replace(microsecond=0)
+    fmt = lambda d: d.strftime("%d/%m/%Y %H:%M")  # noqa: E731
+    base = {"customer_id": cust["C-FMCG"].id, "consignee_name": "Bharat FMCG — Bengaluru DC", "goods_description":
+            "Packaged food", "hsn_code": "1905", "packing_type": "BOXES", "freight_payment": "TBB"}
+    t1 = masters.save_record(ctx, tspec, {**base, "trip_date": (now_ - timedelta(days=4)).strftime("%d/%m/%Y"),
+        "lr_number": "LR-1001", "lr_date": (now_ - timedelta(days=4)).strftime("%d/%m/%Y"), "vehicle_id": v["V001"].id,
+        "driver_id": drv["D001"], "origin": "Chennai", "destination": "Bengaluru", "from_state_id": st["TN"],
+        "to_state_id": st["KA"], "from_pincode": "600032", "to_pincode": "560099", "planned_km": "350",
+        "packages": 400, "weight_tonnes": "12", "goods_value": "850000", "goods_invoice_number": "BF/24/7781",
+        "freight_basis": "PER_TONNE", "freight_rate": "2500", "loading_charges": "1500",
+        "expenses": [{"expense_head": "LOADING", "amount": "1500", "paid_by": "DRIVER"},
+                     {"expense_head": "POLICE_RTO", "amount": "500", "paid_by": "DRIVER"},
+                     {"expense_head": "PARKING", "amount": "200", "paid_by": "DRIVER"}]})
+    masters.save_record(ctx, masters.get_spec("eway_bills"), {"ewb_number": "331000000101", "trip_id": t1["id"],
+        "generated_at": fmt(now_ - timedelta(days=4, hours=2)), "transporter_gstin": "33AABCT1234F1Z5"})
+    act = lambda k, rid, data: masters.run_action(ctx, tspec, rid, k, data)  # noqa: E731
+    act("start", t1["id"], {"actual_start": fmt(now_ - timedelta(days=4)), "start_odometer": "120100"})
+    act("deliver", t1["id"], {"actual_end": fmt(now_ - timedelta(days=3)), "end_odometer": "120460",
+                              "delivered_packages": 400})
+    act("pod", t1["id"], {"pod_received_date": (now_ - timedelta(days=2)).strftime("%d/%m/%Y")})
+    t2 = masters.save_record(ctx, tspec, {**base, "trip_date": now_.strftime("%d/%m/%Y"), "lr_number": "LR-1002",
+        "vehicle_id": v["V002"].id, "driver_id": drv["D002"], "origin": "Chennai", "destination": "Coimbatore",
+        "from_state_id": st["TN"], "to_state_id": st["TN"], "planned_km": "505", "packages": 250, "weight_tonnes": "9",
+        "goods_value": "420000", "freight_basis": "FIXED", "freight_amount": "38000", "advance_received": "10000"})
+    masters.save_record(ctx, masters.get_spec("eway_bills"), {"ewb_number": "331000000102", "trip_id": t2["id"],
+        "generated_at": fmt(now_ - timedelta(hours=6))})
+    act("start", t2["id"], {"actual_start": fmt(now_ - timedelta(hours=5)), "start_odometer": "120050"})
+    masters.save_record(ctx, tspec, {**base, "trip_date": now_.strftime("%d/%m/%Y"), "lr_number": "LR-1003",
+        "vehicle_id": v["V003"].id, "driver_id": drv["D003"], "origin": "Chennai", "destination": "Hosur",
+        "planned_km": "300", "freight_basis": "PER_KM", "freight_rate": "65", "goods_value": "120000"})
+    aspec = masters.get_spec("driver_advances")
+    for d, trip, amt, purpose in (("D001", t1["id"], "5000", "Trip cash — diesel top-up, food"),
+                                  ("D002", t2["id"], "4000", "Trip cash")):
+        masters.save_record(ctx, aspec, {"driver_id": drv[d], "trip_id": trip, "amount": amt, "payment_mode": "UPI",
+                                         "advance_date": (now_ - timedelta(days=4)).strftime("%d/%m/%Y"), "purpose": purpose})
+    masters.save_record(ctx, masters.get_spec("driver_settlements"), {
+        "driver_id": drv["D001"], "trip_id": t1["id"], "settlement_date": now_.strftime("%d/%m/%Y"),
+        "allowance_per_day": "400"})
 
 
 def run(demo: bool = False) -> None:
     from app.database import get_engine, session_scope
     from app.models import Base
-    Base.metadata.create_all(get_engine())  # no-op when Alembic already created the schema
+    from sqlalchemy import inspect as sa_inspect
+    eng = get_engine()
+    # Only for a database without migrations (SQLite quick start / tests). On a migrated database Alembic owns the
+    # schema: creating new tables here before `alembic upgrade` would make that upgrade fail.
+    if "alembic_version" not in sa_inspect(eng).get_table_names():
+        Base.metadata.create_all(eng)
     with session_scope() as db:
         seed_security(db)
         seed_reference(db)

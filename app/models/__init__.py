@@ -7,4 +7,5 @@ from app.models.finance import *  # noqa: F401,F403
 from app.models.imports import *  # noqa: F401,F403
 from app.models.operations import *  # noqa: F401,F403
 from app.models.tyres import *  # noqa: F401,F403
+from app.models.trips import *  # noqa: F401,F403
 from app.models.system import *  # noqa: F401,F403

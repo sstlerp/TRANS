@@ -116,6 +116,15 @@ class Invoice(Base, TxnBase):
     status: Mapped[str] = mapped_column(String(20), default="OPEN")  # OPEN/PARTIALLY_PAID/PAID/OVERPAID/CANCELLED
     original_invoice_id: Mapped[int | None] = fk("invoices.id")
     remarks: Mapped[str | None] = mapped_column(Text)
+    # GST e-invoice (IRN from the Invoice Registration Portal)
+    einvoice_status: Mapped[str] = mapped_column(String(15), default="NOT_APPLICABLE", server_default="NOT_APPLICABLE")
+    # NOT_APPLICABLE / PENDING / GENERATED / CANCELLED
+    irn: Mapped[str | None] = mapped_column(String(64), unique=True)
+    irn_ack_number: Mapped[str | None] = mapped_column(String(30))
+    irn_ack_date: Mapped[datetime | None] = mapped_column(DateTime)
+    signed_qr: Mapped[str | None] = mapped_column(Text)
+    irn_cancelled_at: Mapped[datetime | None] = mapped_column(DateTime)
+    irn_cancel_reason: Mapped[str | None] = mapped_column(String(255))
 
 
 class InvoiceAllocation(Base, PKMixin):

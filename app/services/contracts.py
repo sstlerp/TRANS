@@ -61,9 +61,55 @@ def invoice_before_save(ctx, inv: Invoice, data: dict, is_new: bool) -> None:
         days = days if days is not None else (db.get(Customer, inv.customer_id).credit_days or 0)
         from datetime import timedelta
         inv.due_date = inv.invoice_date + timedelta(days=days)
+    _einvoice_checks(ctx, inv, data, is_new)
     if not is_new and inv.received_amount and ({"customer_id", "taxable_amount", "tax_amount"} & set(data)):
         if inv.total_amount < inv.received_amount:
             raise BusinessError("Invoice total cannot be reduced below the amount already received")
+
+
+def _einvoice_checks(ctx, inv: Invoice, data: dict, is_new: bool) -> None:
+    """GST e-invoice: IRN format, status, and no changes to an invoice that already has an IRN."""
+    import re
+
+    from sqlalchemy import inspect as sa_inspect
+
+    from app.services.rules import rule
+    if inv.irn:
+        inv.irn = inv.irn.strip().lower()
+        if not re.fullmatch(r"[0-9a-f]{64}", inv.irn):
+            raise BusinessError("IRN must be the 64-character code from the e-invoice portal", "VALIDATION",
+                                [{"field": "irn", "message": "64 hexadecimal characters"}])
+        if inv.einvoice_status in (None, "NOT_APPLICABLE", "PENDING"):
+            inv.einvoice_status = "GENERATED"
+        if not inv.irn_ack_number:
+            ctx.warnings.append("Enter the acknowledgement number and date from the e-invoice portal")
+    elif inv.einvoice_status == "GENERATED":
+        raise BusinessError("Enter the IRN for a generated e-invoice", "VALIDATION",
+                            [{"field": "irn", "message": "Required when the e-invoice is generated"}])
+    if is_new and (inv.einvoice_status in (None, "NOT_APPLICABLE")) and not inv.irn and rule(ctx.db, "EINVOICE_APPLICABLE"):
+        inv.einvoice_status = "PENDING"
+    if not is_new:
+        st = sa_inspect(inv)
+        had_irn = st.attrs.irn.history.deleted or (inv.irn and not st.attrs.irn.history.added)
+        if had_irn and inv.einvoice_status == "GENERATED" and any(
+                st.attrs[k].history.has_changes() for k in ("customer_id", "invoice_date", "taxable_amount", "tax_amount")):
+            raise BusinessError("This invoice has an e-invoice IRN — customer, date and amounts cannot change. "
+                                "Cancel the IRN (within 24 hours) or issue a credit / debit note.")
+
+
+def cancel_irn(ctx, inv: Invoice, data: dict) -> dict:
+    from datetime import timedelta
+
+    from app.core.utils import now
+    if inv.einvoice_status != "GENERATED" or not inv.irn:
+        raise BusinessError("This invoice has no generated e-invoice")
+    if inv.irn_ack_date and now() - inv.irn_ack_date > timedelta(hours=24):
+        raise BusinessError("An IRN can be cancelled only within 24 hours of generation — issue a credit note instead")
+    old = inv.irn
+    inv.einvoice_status, inv.irn_cancelled_at, inv.irn_cancel_reason = "CANCELLED", now(), data.get("reason")
+    audit(ctx.db, ctx.user, "IRN_CANCEL", "invoices", inv.id, {"irn": old, "einvoice_status": "GENERATED"},
+          {"einvoice_status": "CANCELLED"}, reason=data.get("reason"))
+    return {"message": "E-invoice marked cancelled — cancel it on the e-invoice portal too"}
 
 
 def invoice_after_save(ctx, inv: Invoice, data: dict, is_new: bool) -> None:

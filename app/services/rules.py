@@ -40,6 +40,21 @@ DEFAULTS: dict[str, tuple[str, str, str, str, str | None]] = {
     "MAINTENANCE_DUE_ALERT_KM": ("MAINTENANCE", "500", "INT", "Alert when next service is within km", None),
     "MAINTENANCE_DUE_ALERT_DAYS": ("MAINTENANCE", "7", "INT", "Alert when next service is within days", None),
     "TOLL_PLAZA_REQUIRED": ("TOLL", "false", "BOOL", "Unmatched plaza keeps toll row in review", None),
+    "TRIP_NUMBER_PREFIX": ("TRIP", "TRP", "STRING", "Prefix of automatic trip numbers (TRP/2610/0001)", None),
+    "EWAY_BILL_THRESHOLD": ("TRIP", "50000", "DECIMAL", "Goods value from which a trip needs an e-way bill (₹)", None),
+    "EWAY_CHECK_MODE": ("TRIP", "WARN", "CHOICE", "Starting a trip without a valid e-way bill above the threshold",
+                        "ERROR,WARN,IGNORE"),
+    "EWAY_KM_PER_DAY": ("TRIP", "200", "INT", "E-way bill validity: km per day (regular cargo)", None),
+    "EWAY_ODC_KM_PER_DAY": ("TRIP", "20", "INT", "E-way bill validity: km per day (over-dimensional cargo)", None),
+    "EWAY_ALERT_HOURS": ("TRIP", "12", "DECIMAL", "Alert when an e-way bill of a trip in transit expires within hours",
+                         None),
+    "EWAY_EXTEND_WINDOW_HOURS": ("TRIP", "8", "DECIMAL", "Portal window to extend before / after expiry (hours)", None),
+    "POD_PENDING_DAYS": ("TRIP", "7", "INT", "Alert when POD is not received this many days after delivery", None),
+    "DRIVER_ALLOWANCE_PER_DAY": ("TRIP", "0", "DECIMAL", "Default driver allowance (bhatta) per trip day (₹, 0 = none)",
+                                 None),
+    "DRIVER_ADVANCE_LIMIT": ("TRIP", "0", "DECIMAL", "Warn when a driver's open advances exceed (₹, 0 = no limit)", None),
+    "ADVANCE_ALERT_DAYS": ("TRIP", "15", "INT", "Alert when driver advances stay unsettled this many days", None),
+    "EINVOICE_APPLICABLE": ("CONTRACT", "false", "BOOL", "New invoices need a GST e-invoice (IRN) — status PENDING", None),
 }
 
 

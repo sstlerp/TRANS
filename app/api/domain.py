@@ -432,6 +432,8 @@ def run_daily_jobs(db) -> dict:
     res = {"classifications_applied": vehicles.apply_scheduled_classifications(db),
            "renewal_status_changes": renewals.refresh_statuses(db), "renewal_alerts": renewals.scan_alerts(db),
            "maintenance_alerts": maintenance.due_alerts(db)}
+    from app.services import trips
+    res["trips"] = trips.daily_alerts(db)
     from app.services.notifications import notify
     unmatched = db.execute(select(func.count()).select_from(BankTransaction).where(
         BankTransaction.recon_status == "UNMATCHED", BankTransaction.status == "ACTIVE")).scalar_one()
@@ -626,6 +628,25 @@ def toll_plaza_map(state_id: int | None = None, q: str | None = None, source: st
     return out
 
 
+@router.get("/trips/{trip_id}/eway-json")
+def trip_eway_json(trip_id: int, ctx: Ctx = Depends(ctx_dep)):
+    """E-way bill details of a trip in the GST portal's bulk-generation JSON layout (download, check, upload)."""
+    ctx.user.require("trip.view")
+    import json as _json
+
+    from app.models.trips import Trip
+    from app.services import trips
+    t = ctx.db.get(Trip, trip_id)
+    if not t:
+        raise NotFound("Trip")
+    data = trips.nic_eway_json(ctx.db, t)
+    missing = data.pop("_missing")
+    name = (t.trip_number or str(t.id)).replace("/", "-")
+    return Response(_json.dumps(data, indent=2, ensure_ascii=False), media_type="application/json",
+                    headers={"Content-Disposition": f'attachment; filename="ewaybill_{name}.json"',
+                             "X-Missing-Fields": ",".join(missing)})
+
+
 # ───────────────────────── global search ─────────────────────────
 _SEARCH = [("vehicles", "Vehicle", ("registration_number", "vehicle_code", "fleet_number", "chassis_number"), "fleet.view"),
            ("drivers", "Driver", ("name", "driver_code", "license_number"), "driver.view"),
@@ -637,7 +658,10 @@ _SEARCH = [("vehicles", "Vehicle", ("registration_number", "vehicle_code", "flee
            ("bank_transactions", "Bank txn", ("utr", "reference_number"), "finance.view"),
            ("job_cards", "Job card", ("job_card_number",), "maintenance.view"),
            ("insurance_policies", "Policy", ("policy_number",), "compliance.view"),
-           ("vehicle_renewals", "Certificate", ("certificate_number",), "compliance.view")]
+           ("vehicle_renewals", "Certificate", ("certificate_number",), "compliance.view"),
+           ("trips", "Trip / LR", ("trip_number", "lr_number", "goods_invoice_number"), "trip.view"),
+           ("eway_bills", "E-way bill", ("ewb_number",), "trip.view"),
+           ("driver_settlements", "Settlement", ("settlement_number",), "trip.view")]
 
 
 @router.get("/search")

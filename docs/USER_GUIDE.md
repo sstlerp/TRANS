@@ -54,6 +54,48 @@ Contracts hold customer, dates, billing method/rate and **vehicle allocation %**
 credit note) must allocate their taxable income to vehicles/cost centers (auto-filled from the contract split).
 Income is recognised from invoices; bank receipts only settle them (Receivables report shows ageing).
 
+**GST e-invoice:** each invoice has an *E-Invoice (GST)* section. Generate the e-invoice on the GST e-invoice portal
+(or through your GSP), then enter the **IRN** (64 characters), acknowledgement number and date — the status becomes
+*Generated*. From then on the customer, date and amounts are locked; **Cancel E-Invoice (IRN)** is allowed within 24
+hours of the acknowledgement (cancel it on the portal too), otherwise issue a credit note. Set the business rule
+`EINVOICE_APPLICABLE` to *true* if your turnover requires e-invoicing — new invoices then start as *Pending* and are
+listed under **Contracts → E-Invoice Pending**.
+
+## 4a. Trips & freight, e-way bills, driver advances & settlements
+
+Module card **Trips & Freight**.
+
+* **Trips / Lorry Receipts** — one record per consignment: LR number and date, customer (bill-to), vehicle, driver,
+  route (from/to, PIN, state, distance), consignor/consignee with GSTIN, goods (HSN, packages, weight, value, the
+  consignor's invoice) and freight. Freight is *fixed*, *per tonne* or *per km* (calculated as you type) plus
+  loading, unloading, detention and other charges, less the advance received from the customer. Driver-paid and
+  company-paid trip expenses (loading, cash toll, police/RTO, parking …) are entered in the grid.
+  Work it with the actions: **Start Trip** (start time and odometer; stops if the vehicle is already on a trip;
+  warns about an expired licence and a missing e-way bill) → **Mark Delivered** (end odometer → actual km;
+  per-km freight is recalculated; the trip's e-way bills are closed) → **POD Received** (attach the scanned POD under
+  Documents) → **Create Invoice** (raises the customer invoice for the total freight, allocated to the vehicle) →
+  **Close Trip**. Planned or running trips can be cancelled with a reason. Once invoiced, customer, vehicle and
+  freight are locked. The links above the form open the trip's e-way bills, the **E-way JSON** download for the GST
+  portal, advances and settlement.
+* **E-way Bills** — enter the 12-digit number and generation time against the trip; distance, goods value, places and
+  document are copied from the trip. Validity is calculated: 1 day per 200 km (over-dimensional cargo 20 km),
+  ending at midnight. **Extend Validity** (remaining km or a new time, with reason), **Change Vehicle (Part-B)**,
+  **Close**, **Cancel** (only within 24 hours of generation). The list is sorted by expiry; alerts are raised before a
+  bill expires while the trip is in transit. Business rules: `EWAY_BILL_THRESHOLD` (₹50,000), `EWAY_CHECK_MODE`
+  (WARN / ERROR / IGNORE at trip start), `EWAY_KM_PER_DAY`, `EWAY_ODC_KM_PER_DAY`, `EWAY_ALERT_HOURS`.
+* **Driver Advances** — cash / UPI given to a driver (optionally for a trip). Warns above `DRIVER_ADVANCE_LIMIT`;
+  alerts for advances open longer than `ADVANCE_ALERT_DAYS`. An advance that is not yet in a settlement can be
+  cancelled.
+* **Driver Settlements (trip sheet)** — choose the driver and a trip (or leave the trip blank to settle everything
+  up to the date / in the period) and save: the driver's open advances and driver-paid trip expenses are pulled in.
+  **Net = driver-paid expenses + allowance (days × rate, `DRIVER_ALLOWANCE_PER_DAY`) + other earnings − deductions −
+  advances**; positive = pay the driver, negative = recover from the driver. **Approve** (permission `trip.approve`)
+  settles the advances; **Mark Paid / Recovered**; **Cancel** reopens the advances and expenses. The bank payment or
+  recovery can be linked in the Reconciliation Workbench (**Match driver advance / settlement / recovery**).
+
+Money is counted once: freight income only through the invoice; trip expenses are cost of the vehicle's cost center;
+advances are not cost (they are recovered in the settlement); the approved allowance is driver cost.
+
 ## 5. Bank statements & reconciliation
 
 1. Import the statement (Imports → Import Wizard, type BANK, choose the account) or add a manual transaction.
@@ -110,13 +152,16 @@ next due km/date from the maintenance type, approval for large amounts, **Comple
 tax, permit, PESO, driver, other, allocated common costs, net contribution, cost/km), category costs (history-aware),
 ledger, income, receivables, fuel efficiency & summary, toll summary & review, maintenance, tyre master/stock/
 movements/cost per km/brand performance/retreading/warranty/inspection/scrap, compliance register, bank
-reconciliation & unmatched, vendor spend, vehicle classification history, audit. Filters by date range, branch,
+reconciliation & unmatched, vendor spend, vehicle classification history, audit, **trip profitability** (freight vs
+fuel and toll in the trip window, trip expenses and driver allowance), LR register, POD pending, e-way bill register,
+driver advances, driver settlements, e-invoice status. Filters by date range, branch,
 vehicle, category, sub-category, cost center type, customer, provider, status; export to Excel, CSV, PDF or print.
 
 ## 10. Alerts, approvals, audit
 
 * Bell icon → unread alerts (renewals, insurance, permits, fitness, PUCC, PESO, licences, unmatched bank, import
-  errors, unusual fuel, tyre tread/warranty, maintenance due, pending approvals). Configure channels in Notification Rules.
+  errors, unusual fuel, tyre tread/warranty, maintenance due, pending approvals, e-way bills expiring / expired in
+  transit, POD pending, unsettled driver advances). Configure channels in Notification Rules.
 * **Approvals** inbox: approve/reject with remarks; multi-level where configured; self-approval blocked by default.
 * **Audit Log**: every create/update (field diff)/delete/import/match/unmatch/allocation/approval/override/renewal/
   tyre movement/cost-center change with user, time, IP and reason.

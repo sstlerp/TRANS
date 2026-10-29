@@ -3,7 +3,8 @@
 A modular, auditable ERP for an India-based transport and logistics company: fleet and cost centers, compliance and
 renewals, insurance, contracts and income, bank statement import and reconciliation, fuel, toll/FASTag (with the toll
 plaza master fetched from the internet — OpenStreetMap, data.gov.in or a FASTag API; see
-[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)), maintenance,
+[docs/INTEGRATIONS.md](docs/INTEGRATIONS.md)), maintenance, trips & freight (lorry receipts, POD, trip
+profitability), GST e-way bills and e-invoice (IRN) details, driver advances & trip-sheet settlements,
 the full tyre lifecycle, profitability reporting, RBAC, audit trail, documents, alerts and approvals.
 
 * **Backend:** Python 3.11+, FastAPI (REST + OpenAPI), SQLAlchemy 2 ORM, Alembic migrations, service layer.
@@ -62,7 +63,7 @@ Browser (HTML pages + erp.js / master.js)          API clients / provider feeds
 │   vehicles · renewals · bank · contracts · operations (fuel/toll) · maintenance  │
 │   tyres · import_engine + transforms · reports · dashboard · approvals ·         │
 │   documents · notifications · rules (configurable business rules)               │
-│ app/models/*   SQLAlchemy ORM (91 tables)          app/core/* security, audit,   │
+│ app/models/*   SQLAlchemy ORM (96 tables)          app/core/* security, audit,   │
 │                                                    utils (DD/MM/YYYY, decimals)  │
 └──────────────────────────────────────────┬──────────────────────────────────────┘
                                            ▼
@@ -150,6 +151,8 @@ The migration files that create every table in `ERP_LOGISTICS` are in [`migratio
 | `migrations/sql/0001_initial_schema.sql` | the same schema as plain MySQL SQL, incl. `CREATE DATABASE ERP_LOGISTICS` |
 | `migrations/sql/0001_initial_schema_rollback.sql` | plain-SQL rollback (drops the tables — back up first) |
 | `migrations/versions/0002_toll_plaza_internet_sync.py` + `sql/0002_…sql` | toll plaza place / state-as-in-source, source key, and the `toll_plaza_sync_runs` table |
+| `migrations/versions/0003_toll_plaza_keep_manual_changes.py` + `sql/0003_…sql` | toll plaza corrections kept by later internet fetches |
+| `migrations/versions/0004_trips_freight_eway_einvoice.py` + `sql/0004_…sql` | tables `trips`, `trip_expenses`, `eway_bills`, `driver_advances`, `driver_settlements`; GST e-invoice (IRN) columns on `invoices` |
 
 **Option A — Alembic (recommended):**
 
@@ -168,6 +171,7 @@ python scripts/export_sql_migrations.py                # refresh the plain-SQL f
 mysql -u root -p < migrations/sql/0001_initial_schema.sql
 mysql -u root -p < migrations/sql/0002_toll_plaza_internet_sync.sql
 mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
+mysql -u root -p < migrations/sql/0004_trips_freight_eway_einvoice.sql
 ```
 
 Either way, then load the reference data with `python -m app.seed`. Both options produce an identical schema
@@ -250,7 +254,7 @@ back completely and the batch shows `FAILED`. Try it with the files in [`samples
 * **Administration → Roles**: tick permissions. Permissions are `module.action`
   (`view/create/edit/delete` plus sensitive ones: `finance.match`, `finance.allocate`, `approval.approve`,
   `fleet.reclassify`, `fleet.odometer_override`, `fuel.override`, `tyre.move`, `tyre.correct`, `tyre.override`,
-  `compliance.renew`, `import.run`, `report.export`, `audit.view`, …).
+  `compliance.renew`, `import.run`, `report.export`, `audit.view`, `trip.approve` (driver settlements), …).
 * Seeded roles: ADMIN, FINANCE, OPERATIONS, APPROVER, VIEWER (editable).
 * **Administration → Approval Rules**: approval levels for bank allocations/matches above an amount, large job cards,
   odometer overrides, tyre corrections, etc. Approvals are handled in **Dashboard → Approvals** with full history.
