@@ -2,7 +2,7 @@
 
 | Path | Contents |
 |---|---|
-| `versions/0001_initial_schema.py` | Alembic revision `0001`: creates all 90 ERP tables (organisation, fleet, compliance, contracts & finance, import engine, fuel/toll/maintenance, tyres, security/audit/documents/notifications/config) with PKs, unique keys, indexes and FKs. `downgrade()` drops them. |
+| `versions/0001_initial_schema.py` | Alembic revision `0001`: creates all 90 ERP tables of the first release (organisation, fleet, compliance, contracts & finance, import engine, fuel/toll/maintenance, tyres, security/audit/documents/notifications/config) with PKs, unique keys, indexes and FKs. `downgrade()` drops them. |
 | `env.py` | Reads `ERP_DATABASE_URL` (default database `ERP_LOGISTICS`). In online mode it runs `CREATE DATABASE IF NOT EXISTS ERP_LOGISTICS CHARACTER SET utf8mb4` before migrating. |
 | `versions/0002_toll_plaza_internet_sync.py` | Revision `0002`: `toll_plazas.place` and `state_name`, unique key (`api_source`, `external_plaza_id`), new table `toll_plaza_sync_runs` (toll plaza fetches from the internet — see `docs/INTEGRATIONS.md`). |
 | `sql/0001_initial_schema.sql` | Plain MySQL script: `CREATE DATABASE ERP_LOGISTICS`, all tables, and the `alembic_version` row `0001`. |
@@ -13,9 +13,9 @@
 ## Create the schema
 
 ```bash
-# A) Alembic
+# A) Alembic (run_app.bat does this automatically)
 alembic upgrade head
-# B) plain SQL — every file in order
+# B) plain SQL — every file in order (mysql command line, MySQL Workbench "Run SQL Script", HeidiSQL …)
 mysql -u root -p < migrations/sql/0001_initial_schema.sql
 mysql -u root -p < migrations/sql/0002_toll_plaza_internet_sync.sql
 mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
@@ -23,11 +23,36 @@ mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
 python -m app.seed            # add --demo for sample fleet data
 ```
 
+Both ways give an identical schema (checked table by table on MySQL 8.0 and MariaDB 10.11, after every upgrade and
+every rollback) and keep the `alembic_version` marker, so you can mix them — e.g. create with SQL, later upgrade
+with `run_app.bat`.
+
+### What the plain-SQL files check
+
+Each file wraps its statements in a temporary procedure (`erp_migration_step`) that reads `alembic_version` first:
+
+| Situation | Result |
+|---|---|
+| File already applied (or the database is newer) | `Migration 000N is already applied … nothing to do.` — no change |
+| Earlier file not run yet | stops: `Migration 000N needs migration 000M first` — no change |
+| 0001 on a database that has tables but no marker | stops before creating anything |
+| 0002 with duplicate (API Source, External Plaza ID) toll plazas | stops and names the problem — fix the rows, run again |
+| Rollback of a revision that is not the newest | stops: `Roll back migration 000N first (newest first)` |
+| Rollback of a revision that is not applied | `nothing to roll back` |
+
+0001 also sets the database's default character set to **utf8mb4** (Indian-language text), even if the database was
+created earlier with another character set. The files use the database name **`ERP_LOGISTICS`**; on Windows MySQL
+names are not case-sensitive, so `erp_logistics` is the same database. For another name, edit the `USE` lines.
+If a file stops at a check, the helper procedure stays until the next file runs (harmless).
+
 ## Changing the schema
 
 1. Edit the models in `app/models/`.
-2. `alembic revision --autogenerate -m "short description"` → review the new file in `versions/`.
+2. `alembic revision --autogenerate -m "short description"` → review the new file in `versions/`. If existing data could
+   break the change (e.g. a new unique key), add a `PRECHECKS` list like in `0002_…py` — it is checked both by
+   Alembic and by the SQL file before anything is changed.
 3. `alembic upgrade head` on a test copy, run `pytest`, then `alembic check`.
-4. `scripts/export_sql_migrations.sh` to refresh the plain-SQL scripts (one upgrade + one rollback file per revision).
+4. `python scripts/export_sql_migrations.py` to refresh the plain-SQL scripts (one upgrade + one rollback file per
+   revision). `pytest` fails if they are out of date (`tests/test_migrations.py`).
 
 Always back up (`scripts/backup_mysql.sh`) before upgrading production.

@@ -1,20 +1,47 @@
 -- =====================================================================================================
--- TRANS ERP — database ERP_LOGISTICS — migration 0003: toll plaza keep manual changes (toll_plazas.details_locked, toll_plaza_sync_runs.locked)
+-- TRANS ERP — database ERP_LOGISTICS — migration 0003 (upgrade)
+--   toll plaza keep manual changes (toll_plazas.details_locked, toll_plaza_sync_runs.locked)
 --
--- Generated from migrations/versions/0003_toll_plaza_keep_manual_changes.py with:  alembic upgrade 0002:0003 --sql   (scripts/export_sql_migrations.sh)
--- Use it instead of Alembic by running the files in order:
---     mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
--- Each file also updates the alembic_version marker, so later `alembic upgrade head` runs continue from here.
+-- Generated from migrations/versions/0003_toll_plaza_keep_manual_changes.py by scripts/export_sql_migrations.py (alembic upgrade 0002:0003 --sql).
+-- Run the files in order, e.g.   mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
+-- Safe to run again: the alembic_version marker is checked first, so an applied step is skipped and a missing
+-- earlier step stops the script before anything is changed. Then `alembic upgrade head` / run_app.bat continue.
 -- =====================================================================================================
+
+-- Requires migration 0002.
 
 USE `ERP_LOGISTICS`;
 SET NAMES utf8mb4;
 
--- Running upgrade 0002 -> 0003
+CREATE TABLE IF NOT EXISTS alembic_version (
+    version_num VARCHAR(32) NOT NULL,
+    CONSTRAINT alembic_version_pkc PRIMARY KEY (version_num)
+);
 
-ALTER TABLE toll_plaza_sync_runs ADD COLUMN locked INTEGER NOT NULL DEFAULT '0';
+DROP PROCEDURE IF EXISTS erp_migration_step;
+DELIMITER $$
+CREATE PROCEDURE erp_migration_step()
+BEGIN
+  DECLARE cur VARCHAR(32) DEFAULT NULL;
+  DECLARE msg VARCHAR(255);
+  DECLARE n INT DEFAULT 0;
+  SELECT MAX(version_num) INTO cur FROM alembic_version;
+  SET n = 0;
+  IF cur IS NOT NULL AND cur >= '0003' THEN
+    SELECT CONCAT('Migration 0003 is already applied (database is at ', cur, ') - nothing to do.') AS result;
+  ELSEIF cur IS NULL OR cur <> '0002' THEN
+    SET msg = CONCAT('Migration 0003 needs migration 0002 first; database is at ', IFNULL(cur, 'no version'), '.');
+    SET msg = LEFT(msg, 128);  -- MySQL limit for SIGNAL messages
+    SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = msg;
+  ELSE
+    ALTER TABLE toll_plaza_sync_runs ADD COLUMN locked INTEGER NOT NULL DEFAULT '0';
 
-ALTER TABLE toll_plazas ADD COLUMN details_locked BOOL NOT NULL DEFAULT '0';
+    ALTER TABLE toll_plazas ADD COLUMN details_locked BOOL NOT NULL DEFAULT '0';
 
-UPDATE alembic_version SET version_num='0003' WHERE alembic_version.version_num = '0002';
-
+    UPDATE alembic_version SET version_num = '0003' WHERE version_num = '0002';
+    SELECT 'Migration 0003 applied.' AS result;
+  END IF;
+END$$
+DELIMITER ;
+CALL erp_migration_step();
+DROP PROCEDURE IF EXISTS erp_migration_step;

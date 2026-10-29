@@ -159,17 +159,21 @@ alembic current               # shows the applied revision (0001)
 alembic check                 # verifies models and migrations agree
 alembic downgrade base        # drop all tables (development only)
 alembic revision --autogenerate -m "describe change"   # after changing app/models/*, then:
-scripts/export_sql_migrations.sh                       # refresh the plain-SQL files
+python scripts/export_sql_migrations.py                # refresh the plain-SQL files
 ```
 
 **Option B — plain SQL (MySQL Workbench / command line, no Python needed for the schema):**
 
 ```bash
 mysql -u root -p < migrations/sql/0001_initial_schema.sql
+mysql -u root -p < migrations/sql/0002_toll_plaza_internet_sync.sql
+mysql -u root -p < migrations/sql/0003_toll_plaza_keep_manual_changes.sql
 ```
 
-Either way, then load the reference data with `python -m app.seed`. Both options produce an identical schema and
-record revision `0001` in `alembic_version`, so you can switch to Alembic for later upgrades.
+Either way, then load the reference data with `python -m app.seed`. Both options produce an identical schema
+(verified on MySQL 8.0 and MariaDB 10.11) and record the revision in `alembic_version`, so you can switch between them.
+Each SQL file checks that version first: running a file twice is harmless, and a file run out of order stops with a
+clear message before changing anything (see [`migrations/README.md`](migrations/README.md)).
 
 ## Seed data
 
